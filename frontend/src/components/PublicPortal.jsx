@@ -40,6 +40,7 @@ import '../public-portal.css';
 import { useCalibration, getErrorMessage, formatMotility } from '../calibration';
 import { CalibrationFields, CalibrationStatus, CalibrationSummary, MotionAvailability, KinematicsMetrics } from './CalibrationControls';
 import ParameterHelp from './ParameterHelp';
+import BrandLogos from './BrandLogos';
 
 export default function PublicPortal({ onSwitchToDashboard }) {
   const navigate = useNavigate();
@@ -331,9 +332,7 @@ export default function PublicPortal({ onSwitchToDashboard }) {
           {/* Integrated Navbar inside Hero Card */}
           <header className="hero-internal-nav">
             <div className="hero-brand" onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}>
-              <div className="hero-brand-icon">
-                <Microscope size={20} color="#061019" />
-              </div>
+              <BrandLogos size={34} />
               <div className="hero-brand-text">
                 <span className="brand-name">CASA<span className="brand-dot">·</span>AI</span>
                 <span className="brand-badge-tag">PRO CLINICAL</span>

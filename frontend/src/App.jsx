@@ -2,10 +2,12 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import PublicPortal from './components/PublicPortal';
 import AdminDashboard from './components/AdminDashboard';
 import LoginPage from './components/LoginPage';
+import PageLoader from './components/PageLoader';
 
 export default function App() {
   return (
     <BrowserRouter>
+      <PageLoader />
       <Routes>
         {/* Halaman Beranda Utama / Public Portal */}
         <Route path="/" element={<PublicPortal />} />

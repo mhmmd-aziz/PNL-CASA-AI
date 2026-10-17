@@ -3,9 +3,111 @@
   min-height: 100vh;
   display: flex;
   flex-direction: column;
-  background: radial-gradient(circle at 50% 10%, rgba(0, 175, 160, 0.08) 0%, #f8fafc 80%);
+  background:
+    radial-gradient(circle at 12% 18%, rgba(0, 175, 160, 0.22) 0%, transparent 42%),
+    radial-gradient(circle at 88% 82%, rgba(193, 215, 46, 0.24) 0%, transparent 45%),
+    radial-gradient(circle at 85% 12%, rgba(37, 99, 235, 0.10) 0%, transparent 40%),
+    linear-gradient(160deg, #ecfdf9 0%, #f8fafc 45%, #f7fbe6 100%);
   font-family: 'Plus Jakarta Sans', -apple-system, sans-serif;
   color: #0f172a;
+  position: relative;
+  overflow: hidden;
+}
+
+/* Lapisan dekorasi latar */
+.login-bg-decor {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background-image: radial-gradient(rgba(0, 175, 160, 0.16) 1.2px, transparent 1.2px);
+  background-size: 22px 22px;
+  -webkit-mask-image: radial-gradient(ellipse at center, #000 30%, transparent 75%);
+  mask-image: radial-gradient(ellipse at center, #000 30%, transparent 75%);
+}
+
+.login-blob {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(60px);
+  opacity: 0.55;
+  animation: login-float 14s ease-in-out infinite;
+}
+
+.login-blob-teal {
+  width: 360px;
+  height: 360px;
+  background: #00AFA0;
+  top: -120px;
+  left: -80px;
+}
+
+.login-blob-lime {
+  width: 320px;
+  height: 320px;
+  background: #C1D72E;
+  bottom: -110px;
+  right: -60px;
+  animation-delay: -5s;
+}
+
+.login-blob-blue {
+  width: 220px;
+  height: 220px;
+  background: #60A5FA;
+  top: 30%;
+  right: 12%;
+  opacity: 0.25;
+  animation-delay: -9s;
+}
+
+.login-ring {
+  position: absolute;
+  border-radius: 50%;
+  border: 2px solid rgba(0, 175, 160, 0.18);
+}
+
+.login-ring-1 {
+  width: 420px;
+  height: 420px;
+  bottom: -160px;
+  left: -140px;
+}
+
+.login-ring-2 {
+  width: 260px;
+  height: 260px;
+  top: 90px;
+  right: -90px;
+  border-color: rgba(193, 215, 46, 0.35);
+}
+
+@keyframes login-float {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  50% { transform: translate(30px, 24px) scale(1.08); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .login-blob { animation: none; }
+}
+
+.login-top-bar,
+.login-main-container {
+  position: relative;
+  z-index: 1;
+}
+
+/* Logo PNL, INFEST, CASA-AI di atas kartu login */
+.login-card-logos {
+  display: flex;
+  justify-content: center;
+  padding-bottom: 20px;
+  margin-bottom: 22px;
+  border-bottom: 1px dashed #e2e8f0;
+}
+
+.login-card-logos .brand-logos {
+  gap: 18px;
 }
 
 .login-top-bar {
@@ -83,8 +185,11 @@
 }
 
 .login-card {
-  background: #ffffff;
-  border: 1px solid #e2e8f0;
+  background: rgba(255, 255, 255, 0.86);
+  -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.9);
+  border-top: 4px solid #00AFA0;
   border-radius: 24px;
   box-shadow: 0 20px 45px -10px rgba(0, 0, 0, 0.08), 0 8px 16px -4px rgba(0, 0, 0, 0.03);
   width: 100%;

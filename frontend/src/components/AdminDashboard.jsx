@@ -36,6 +36,7 @@ import { createAnalysisRecord, formatMeasurement } from '../analysisRecords';
 import { useCalibration, getErrorMessage, formatMotility } from '../calibration';
 import { CalibrationFields, ConfidenceField, CalibrationSummary, MotionAvailability, AnalysisInterpretation, KinematicsMetrics } from './CalibrationControls';
 import ParameterHelp from './ParameterHelp';
+import BrandLogos from './BrandLogos';
 import { AnalysisRecords, DashboardOverview, EmptyData } from './DashboardDataViews';
 
 // Metadata menu; daftar menu yang tampil per peran ada di ROLES[peran].tabs (auth.js)
@@ -279,14 +280,8 @@ export default function AdminDashboard({ onSwitchToPublic }) {
       <aside className={`dock-sidebar ${dockExpanded ? 'expanded' : ''}`}>
         <div className="dock-panel">
           {/* Top: Brand Logo + tombol buka/ciutkan sidebar */}
-          <div className="dock-header">
-            <div
-              className="dock-brand-btn"
-              title="CASA-AI Medical Portal"
-              onClick={() => navigateTo(roleTabs[0])}
-            >
-              <Microscope size={22} />
-            </div>
+          <div className="dock-header" title="CASA-AI Medical Portal" onClick={() => navigateTo(roleTabs[0])}>
+            <BrandLogos size={30} />
             <span className="dock-brand-label">Menu {currentRoleObj.badge}</span>
           </div>
 
@@ -380,9 +375,6 @@ export default function AdminDashboard({ onSwitchToPublic }) {
         <header className="top-navbar">
           {/* Brand Logo */}
           <div className="brand-group">
-            <div className="brand-logo">
-              <Microscope size={24} />
-            </div>
             <div className="brand-text">
               <h1>
                 CASA<span style={{ color: 'var(--teal)' }}>-AI</span>

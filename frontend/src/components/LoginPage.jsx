@@ -1,6 +1,5 @@
 import { useNavigate, Link } from 'react-router-dom';
 import { 
-  Microscope, 
   AlertCircle, 
   ShieldCheck, 
   ArrowLeft,
@@ -8,6 +7,7 @@ import {
 } from 'lucide-react';
 import { setRoleMode, getAccounts } from '../auth';
 import '../login.css';
+import BrandLogos from './BrandLogos';
 
 export default function LoginPage() {
   const navigate = useNavigate();
@@ -22,12 +22,18 @@ export default function LoginPage() {
 
   return (
     <div className="login-page-root">
+      {/* Dekorasi latar: gradasi, pola titik, dan bentuk melayang */}
+      <div className="login-bg-decor" aria-hidden="true">
+        <span className="login-blob login-blob-teal" />
+        <span className="login-blob login-blob-lime" />
+        <span className="login-blob login-blob-blue" />
+        <span className="login-ring login-ring-1" />
+        <span className="login-ring login-ring-2" />
+      </div>
+
       {/* Top Navbar */}
       <header className="login-top-bar">
         <Link to="/" className="login-brand-link">
-          <div className="login-brand-icon">
-            <Microscope size={22} />
-          </div>
           <div className="login-brand-titles">
             <h1>CASA<span>-AI</span></h1>
             <p>Sperm Analysis Platform</p>
@@ -43,6 +49,10 @@ export default function LoginPage() {
       {/* Main Form Center */}
       <main className="login-main-container">
         <div className="login-card">
+          <div className="login-card-logos">
+            <BrandLogos size={52} />
+          </div>
+
           <div className="login-header">
             <div className="login-badge">
               <Sparkles size={14} />
