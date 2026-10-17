@@ -1,18 +1,7 @@
-import { useState, useRef } from 'react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import axios from 'axios';
 import { 
-  UploadCloud, 
-  Play, 
-  FileVideo, 
-  Image as ImageIcon, 
   Activity, 
-  Loader2, 
-  CheckCircle2, 
-  Folder, 
-  ScanLine, 
-  Settings, 
-  X, 
   HelpCircle, 
   Microscope,
   Lock,
@@ -37,9 +26,6 @@ import {
 } from 'lucide-react';
 import { getRoleMode } from '../auth';
 import '../public-portal.css';
-import { useCalibration, getErrorMessage, formatMotility } from '../calibration';
-import { CalibrationFields, CalibrationStatus, CalibrationSummary, MotionAvailability, KinematicsMetrics } from './CalibrationControls';
-import ParameterHelp from './ParameterHelp';
 import BrandLogos from './BrandLogos';
 
 export default function PublicPortal({ onSwitchToDashboard }) {
@@ -57,29 +43,6 @@ export default function PublicPortal({ onSwitchToDashboard }) {
     }
   };
 
-  // State for AI Screening Tool
-  const [videoFile, setVideoFile] = useState(null);
-  const [isImage, setIsImage] = useState(false);
-  const [confThres, setConfThres] = useState(0.25);
-  const [loading, setLoading] = useState(false);
-  const [loadingMsg, setLoadingMsg] = useState('');
-  const [results, setResults] = useState(null);
-  const [error, setError] = useState(null);
-  const fileInputRef = useRef(null);
-  
-  const [showSettings, setShowSettings] = useState(false);
-  const calibrationControls = useCalibration();
-  const { appendCalibration, saveCalibration, calibrationReady, calibrationSaving } = calibrationControls;
-
-  const handleSaveCalibration = async () => {
-    try {
-      await saveCalibration();
-      setShowSettings(false);
-    } catch {
-      setShowSettings(true);
-    }
-  };
-
   // Tabbed Showcase State
   const [activeShowcaseTab, setActiveShowcaseTab] = useState('motility');
 
@@ -88,164 +51,6 @@ export default function PublicPortal({ onSwitchToDashboard }) {
 
   const toggleFaq = (idx) => {
     setOpenFaq(openFaq === idx ? null : idx);
-  };
-
-  const handleFileChange = (e) => {
-    const file = e.target.files[0];
-    if (file) {
-      setVideoFile(file);
-      setIsImage(file.type.startsWith('image/'));
-      setResults(null);
-      setError(null);
-    }
-  };
-
-  const handleDragOver = (e) => {
-    e.preventDefault();
-  };
-
-  const handleDrop = (e) => {
-    e.preventDefault();
-    const file = e.dataTransfer.files[0];
-    if (file && (file.type.startsWith('video/') || file.type.startsWith('image/'))) {
-      setVideoFile(file);
-      setIsImage(file.type.startsWith('image/'));
-      setResults(null);
-      setError(null);
-    } else {
-      setError('Harap masukkan file video (MP4/AVI) atau gambar (JPG/PNG) yang valid.');
-    }
-  };
-
-  const analyzeVideo = async () => {
-    if (!videoFile) return;
-    const formData = new FormData();
-    try {
-      appendCalibration(formData, confThres);
-    } catch (error) {
-      setError(getErrorMessage(error));
-      return;
-    }
-
-    const objUrl = URL.createObjectURL(videoFile);
-    
-    setLoading(true);
-    setLoadingMsg('Mengunggah video sampel...');
-    setError(null);
-    
-    formData.append("video", videoFile);
-
-    try {
-      const submitRes = await axios.post("http://localhost:8000/api/analyze", formData, {
-        headers: { 'Content-Type': 'multipart/form-data' }
-      });
-      
-      const { task_id } = submitRes.data;
-      if (!task_id) {
-        setError("Gagal memulai analisis. Silakan periksa koneksi backend.");
-        setLoading(false);
-        return;
-      }
-      
-      setLoadingMsg('Memproses video dengan AI model...');
-      
-      const pollInterval = 2000;
-      const poll = () => {
-        return new Promise((resolve, reject) => {
-          const interval = setInterval(async () => {
-            try {
-              const progressRes = await axios.get(`http://localhost:8000/api/progress/${task_id}`);
-              const data = progressRes.data;
-              
-              if (data.status === 'completed') {
-                clearInterval(interval);
-                resolve(data.result);
-              } else if (data.status === 'processing') {
-                if (data.total_frames) {
-                  setLoadingMsg(`Menganalisis frame ${data.frame} dari ${data.total_frames}...`);
-                } else {
-                  setLoadingMsg(`Menganalisis frame ${data.frame}...`);
-                }
-              } else if (data.status === 'starting') {
-                setLoadingMsg('Memulai inferensi deteksi & pelacakan...');
-              }
-            } catch (pollErr) {
-              clearInterval(interval);
-              reject(pollErr);
-            }
-          }, pollInterval);
-        });
-      };
-      
-      const result = await poll();
-      
-      if (result.success) {
-        setResults({
-          data: result.data,
-          video_url: `http://localhost:8000${result.video_url}`,
-          heatmap_url: result.heatmap_url,
-          original_url: objUrl
-        });
-      } else {
-        setError(result.error || "Analisis video gagal. Silakan coba lagi.");
-      }
-    } catch (err) {
-      console.error(err);
-      setError(getErrorMessage(err));
-    } finally {
-      setLoading(false);
-      setLoadingMsg('');
-    }
-  };
-
-  const analyzeImage = async () => {
-    if (!videoFile) return;
-    const formData = new FormData();
-    try {
-      appendCalibration(formData, confThres);
-    } catch (error) {
-      setError(getErrorMessage(error));
-      return;
-    }
-    
-    const objUrl = URL.createObjectURL(videoFile);
-    
-    setLoading(true);
-    setLoadingMsg('Menganalisis citra sperma...');
-    setError(null);
-
-    formData.append('image', videoFile);
-
-    try {
-      const res = await axios.post('http://localhost:8000/api/analyze_image', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' }
-      });
-      const result = res.data;
-      if (result.success) {
-        setResults({
-          data: result.data,
-          video_url: `http://localhost:8000${result.video_url}`,
-          heatmap_url: null,
-          original_url: objUrl,
-          is_image: true
-        });
-      } else {
-        setError('Analisis gambar gagal.');
-      }
-    } catch (err) {
-      setError(getErrorMessage(err));
-    } finally {
-      setLoading(false);
-      setLoadingMsg('');
-    }
-  };
-
-  const handleAnalyze = () => {
-    if (isImage) {
-      analyzeImage();
-    } else {
-      analyzeVideo();
-    }
   };
 
   // Content data for showcase tab
@@ -343,7 +148,6 @@ export default function PublicPortal({ onSwitchToDashboard }) {
               <a href="#hero">Beranda</a>
               <a href="#showcase">Fitur Unggulan</a>
               <a href="#bento-section">Teknologi</a>
-              <a href="#skrining-tool">Uji Skrining</a>
               <a href="#who-standard">Standar WHO 6th</a>
               <a href="#faq-section">FAQ</a>
             </nav>
@@ -378,14 +182,6 @@ export default function PublicPortal({ onSwitchToDashboard }) {
               <p className="hero-description">
                 Platform komputasi andrologi berbasis Deep Learning (YOLOv11 & ByteTrack) untuk deteksi presisi tinggi, estimasi bilik Makler 10µm, serta kuantifikasi kinematika motilitas mikro (PR, NP, IM) sesuai pedoman WHO 6th Edition.
               </p>
-
-              <div className="hero-cta-group">
-                <a href="#skrining-tool" className="btn-cta-lime">
-                  <Microscope size={18} />
-                  <span>Mulai Uji Skrining AI</span>
-                  <ArrowRight size={16} />
-                </a>
-              </div>
 
               {/* Quick Specs Highlight Bar */}
               <div className="hero-micro-specs">
@@ -526,12 +322,6 @@ export default function PublicPortal({ onSwitchToDashboard }) {
                 ))}
               </div>
 
-              <div className="tab-card-cta">
-                <a href="#skrining-tool" className="btn-tab-action">
-                  <span>Uji Sampel Fitur Ini</span>
-                  <ArrowRight size={15} />
-                </a>
-              </div>
             </div>
           </div>
 
@@ -640,285 +430,6 @@ export default function PublicPortal({ onSwitchToDashboard }) {
             </div>
 
           </div>
-
-        </div>
-      </section>
-
-      {/* ─── 4. INTERACTIVE SCREENING LAB TOOL (Fully Functional) ─── */}
-      <section className="clean-white-section interactive-lab-wrapper" id="skrining-tool">
-        <div className="section-container">
-          
-          <div className="section-header-center">
-            <span className="section-pill-tag">
-              <Microscope size={14} color="#00AFA0" />
-              <span>UJI SKRINING AI</span>
-            </span>
-            <h2 className="section-heading-large">
-              Uji Sampel Semen (CASA Deep Screening)
-            </h2>
-            <p className="section-subheading-max">
-              Unggah rekaman video mikroskop (MP4) atau foto preparat (JPG/PNG). Model AI akan mendeteksi spermatozoa, melacak trajektori, dan menghitung kinematika motilitas secara instan.
-            </p>
-          </div>
-
-          {!results ? (
-            <div className="screening-upload-card">
-              
-              <div 
-                className="screening-drop-zone"
-                onClick={() => fileInputRef.current?.click()}
-                onDragOver={handleDragOver}
-                onDrop={handleDrop}
-              >
-                <input 
-                  type="file" 
-                  accept="video/*,image/*" 
-                  ref={fileInputRef} 
-                  style={{ display: 'none' }} 
-                  onChange={handleFileChange}
-                />
-                
-                {videoFile ? (
-                  <div className="dropzone-content-selected">
-                    {isImage ? <ImageIcon size={48} color="#00AFA0" /> : <FileVideo size={48} color="#00AFA0" />}
-                    <div className="selected-file-info">
-                      <h4>{videoFile.name}</h4>
-                      <p>{(videoFile.size / (1024 * 1024)).toFixed(2)} MB • {isImage ? 'Citra Preparat' : 'Video Rekaman Mikroskop'}</p>
-                    </div>
-                    <span className="file-ready-badge">File Siap Dianalisis</span>
-                  </div>
-                ) : (
-                  <div className="dropzone-content-empty">
-                    <div className="upload-circle-icon">
-                      <UploadCloud size={36} color="#00AFA0" />
-                    </div>
-                    <h4>Klik atau Tarik File Video / Foto ke Sini</h4>
-                    <p>Format yang didukung: MP4, AVI, MOV, JPG, PNG (Maks 100 MB)</p>
-                    <div className="upload-specs-hints">
-                      <span>• Rekomendasi: Pembesaran 10x / 20x</span>
-                      <span>• FPS: 30–60 FPS</span>
-                      <span>• Bilik Makler 10µm</span>
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              <ParameterHelp name="confidence" />
-              {/* Slider for AI Confidence */}
-              <div className="screening-slider-panel">
-                <div className="slider-header-flex">
-                  <label htmlFor="confThres" className="slider-label">
-                    <span>Sensitivitas Ambang AI (Confidence Threshold):</span>
-                  </label>
-                  <span className="slider-value-pill">{confThres}</span>
-                </div>
-                <input 
-                  type="range" 
-                  id="confThres" 
-                  min="0.05" 
-                  max="0.95" 
-                  step="0.05" 
-                  value={confThres}
-                  onChange={(e) => setConfThres(parseFloat(e.target.value))}
-                  className="modern-range-slider"
-                />
-              </div>
-
-              <ParameterHelp name="analyze" />
-              {/* Control Buttons Bar */}
-              <div className="screening-actions-bar">
-                <button 
-                  type="button"
-                  className="btn-outline-settings" 
-                  onClick={() => setShowSettings(true)}
-                >
-                  <Settings size={17} color="#00AFA0" />
-                  <span>Kalibrasi Bilik & Parameter Analisis</span>
-                </button>
-              </div>
-
-              {error && (
-                <div className="screening-error-alert">
-                  <X size={18} />
-                  <span>{error}</span>
-                </div>
-              )}
-
-              <CalibrationStatus controls={calibrationControls} />
-              <div className="screening-submit-wrap">
-                <button 
-                  className="btn-analyze-execute"
-                  onClick={handleAnalyze} 
-                  disabled={!videoFile || loading || !calibrationReady || calibrationSaving}
-                >
-                  {loading ? (
-                    <>
-                      <Loader2 className="spinning-icon" size={20} />
-                      <span>{loadingMsg || 'Memproses analisis...'}</span>
-                    </>
-                  ) : (
-                    <>
-                      <Play size={20} fill="#061019" />
-                      <span>{isImage ? 'Mulai Analisis Citra Mikroskop' : 'Mulai Analisis Video Mikroskop'}</span>
-                    </>
-                  )}
-                </button>
-              </div>
-
-            </div>
-          ) : (
-            
-            /* Results Display Panel */
-            <div className="screening-results-wrapper">
-              
-              <CalibrationSummary data={results.data} />
-              <KinematicsMetrics data={results.data} extendedOnly />
-              <MotionAvailability data={results.data} />
-              {/* Stats Summary Cards Grid */}
-              <div className="results-metrics-grid">
-                
-                {/* Panel 1: Summary Counts */}
-                <div className="result-metric-card">
-                  <div className="card-top-icon">
-                    <Activity size={18} color="#00AFA0" />
-                    <h4>Hasil Kuantitatif Sampel</h4>
-                  </div>
-                  
-                  <div className="result-stat-row">
-                    <span className="lbl">Total Spermatozoa Terhitung</span>
-                    <span className="val bold text-teal">{results.data.summary.total_sperm} sel</span>
-                  </div>
-
-                  <div className="result-stat-row">
-                    <span className="lbl">Estimasi Konsentrasi Bilik</span>
-                    <span className="val bold text-teal">
-                      {results.data.summary.estimated_concentration ? results.data.summary.estimated_concentration.toFixed(1) : '0.0'} Juta / mL
-                    </span>
-                  </div>
-
-                  <div className="result-stat-row highlight-pr">
-                    <span className="lbl">Motilitas Progresif (PR)</span>
-                    <span className="val text-pr">{formatMotility(results.data, 'progressive_percent')}</span>
-                  </div>
-
-                  <div className="result-stat-row">
-                    <span className="lbl">Non-Progresif (NP)</span>
-                    <span className="val text-np">{formatMotility(results.data, 'non_progressive_percent')}</span>
-                  </div>
-
-                  <div className="result-stat-row">
-                    <span className="lbl">Immotil / Diam (IM)</span>
-                    <span className="val text-im">{formatMotility(results.data, 'immotile_percent')}</span>
-                  </div>
-                </div>
-
-                {/* Panel 2: Kinematics Breakdown */}
-                <div className="result-metric-card">
-                  <div className="card-top-icon">
-                    <Compass size={18} color="#00AFA0" />
-                    <h4>Kinematika Pergerakan (Motion)</h4>
-                  </div>
-
-                  <div className="result-stat-row">
-                    <span className="lbl">Kecepatan Rata-rata</span>
-                    <span className="val">
-                      {results.is_image || results.data.summary.motility_available === false ? 'N/A (motilitas tidak tersedia)' : `${results.data.motion.average_speed.toFixed(1)} µm/s`}
-                    </span>
-                  </div>
-
-                  <div className="result-stat-row">
-                    <span className="lbl">Kecepatan Maksimum</span>
-                    <span className="val">
-                      {results.is_image || results.data.summary.motility_available === false ? 'N/A (motilitas tidak tersedia)' : `${results.data.motion.maximum_speed.toFixed(1)} µm/s`}
-                    </span>
-                  </div>
-
-                  <div className="result-stat-row">
-                    <span className="lbl">Jarak Tempuh Rata-rata</span>
-                    <span className="val">
-                      {results.is_image || results.data.summary.motility_available === false ? 'N/A (motilitas tidak tersedia)' : `${results.data.motion.average_distance.toFixed(1)} µm`}
-                    </span>
-                  </div>
-
-                  <div className="result-stat-row">
-                    <span className="lbl">Total Motil Bergerak (PR + NP)</span>
-                    <span className="val bold" style={{ color: '#00AFA0' }}>
-                      {results.data.summary.motility_available === false ? 'N/A' : `${(results.data.summary.progressive_percent + results.data.summary.non_progressive_percent).toFixed(1)}%`}
-                    </span>
-                  </div>
-
-                  <div className="result-stat-row">
-                    <span className="lbl">Durasi Analisis AI</span>
-                    <span className="val">{results.data.summary.analysis_duration ? results.data.summary.analysis_duration.toFixed(2) : '3.42'} detik</span>
-                  </div>
-                </div>
-
-              </div>
-
-              {/* Side-by-side Visuals Panel */}
-              <div className="result-visual-box">
-                <div className="visual-box-header">
-                  <CheckCircle2 size={18} color="#00AFA0" />
-                  <h4>Visualisasi Rekaman Mikroskop & Anotasi AI</h4>
-                </div>
-
-                <div className="visual-previews-grid">
-                  <div className="preview-pane">
-                    <span className="pane-title"><Folder size={14} /> Dokumen Masukan Asli</span>
-                    <div className="media-view-container">
-                      {results.is_image ? (
-                        <img src={results.original_url} alt="Original specimen" />
-                      ) : (
-                        <video controls src={results.original_url} loop muted>
-                          Browser tidak mendukung pemutar video.
-                        </video>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="preview-pane">
-                    <span className="pane-title"><ScanLine size={14} /> Pelacakan & Anotasi YOLO AI</span>
-                    <div className="media-view-container">
-                      {results.is_image ? (
-                        <img src={results.video_url} alt="Annotated specimen" />
-                      ) : (
-                        <video controls src={results.video_url} autoPlay loop muted>
-                          Browser tidak mendukung pemutar video.
-                        </video>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Interpretation Note */}
-              <div className="clinical-interpretation-banner">
-                <Stethoscope size={20} color="#00AFA0" />
-                <p>
-                  <strong>Interpretasi Klinis:</strong> Distribusi motilitas dan konsentrasi semen di atas dihitung dengan pelacakan kontur kepala spermatozoa pada bilik kedalaman {results.data.calibration?.chamber_depth ?? 'tidak tercatat'} µm. Hasil skrining ini merupakan alat bantu laboratorik dan wajib diverifikasi oleh dokter spesialis andrologi.
-                </p>
-              </div>
-
-              {/* Action Buttons to test another */}
-              <div className="results-actions-center">
-                <button 
-                  className="btn-tab-action"
-                  onClick={() => { setResults(null); setVideoFile(null); }}
-                >
-                  <Play size={16} />
-                  <span>Uji Sampel Lainnya</span>
-                </button>
-                <button 
-                  className="btn-outline-settings"
-                  onClick={handleGoToDashboard}
-                >
-                  <Lock size={15} />
-                  <span>Simpan ke Rekam Medis Pasien (Login Dokter)</span>
-                </button>
-              </div>
-
-            </div>
-          )}
 
         </div>
       </section>
@@ -1122,7 +633,6 @@ export default function PublicPortal({ onSwitchToDashboard }) {
               <ul>
                 <li><a href="#hero">Beranda Utama</a></li>
                 <li><a href="#showcase">Fitur Analisis</a></li>
-                <li><a href="#skrining-tool">Uji Skrining AI</a></li>
                 <li><a href="#who-standard">Standar Rujukan WHO 6th</a></li>
                 <li><a href="#faq-section">FAQ</a></li>
               </ul>
@@ -1164,24 +674,6 @@ export default function PublicPortal({ onSwitchToDashboard }) {
       </footer>
 
       {/* ─── CALIBRATION MODAL ─── */}
-      {showSettings && (
-        <div className="modal-overlay" onClick={() => setShowSettings(false)}>
-          <div className="modal-content" onClick={e => e.stopPropagation()}>
-            <div className="modal-header">
-              <h3 style={{ fontSize: '1.15rem', fontWeight: 800, color: '#0f172a', display: 'flex', alignItems: 'center', gap: '8px', margin: 0 }}>
-                <Settings size={20} color="#00AFA0" /> Pengaturan Kalibrasi Bilik & Analisis
-              </h3>
-              <button className="modal-close" onClick={() => setShowSettings(false)}><X size={20} /></button>
-            </div>
-            
-            <CalibrationFields controls={calibrationControls} />
-
-            <button className="btn-save-modal" onClick={handleSaveCalibration} disabled={!calibrationReady || calibrationSaving}>
-              {calibrationSaving ? 'Menyimpan...' : 'Simpan Konfigurasi ke Server'}
-            </button>
-          </div>
-        </div>
-      )}
 
     </div>
   );

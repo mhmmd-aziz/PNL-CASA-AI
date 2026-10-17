@@ -451,3 +451,296 @@
   justify-content: center;
   gap: 6px;
 }
+
+
+/* ─── Kartu Login ⇄ Registrasi dengan panel warna yang bergeser ─── */
+.auth-shell {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  width: 100%;
+  max-width: 980px;
+  min-height: 640px;
+  background: rgba(255, 255, 255, 0.88);
+  -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.9);
+  border-radius: 28px;
+  box-shadow: 0 30px 60px -18px rgba(15, 23, 42, 0.18), 0 8px 16px -4px rgba(0, 0, 0, 0.04);
+  overflow: hidden;
+}
+
+.auth-pane {
+  padding: 36px 34px;
+  box-sizing: border-box;
+  transition: opacity 0.45s ease 0.2s;
+}
+
+.auth-shell:not(.is-register) .auth-pane-register,
+.auth-shell.is-register .auth-pane-login {
+  opacity: 0;
+  transition-delay: 0s;
+}
+
+.auth-overlay {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  width: 50%;
+  height: 100%;
+  z-index: 3;
+  color: #FFFFFF;
+  background: linear-gradient(150deg, #00AFA0 0%, #00877a 55%, #0f766e 100%);
+  transition: transform 0.75s cubic-bezier(0.7, 0, 0.25, 1), background 0.75s ease;
+  overflow: hidden;
+}
+
+/* Warna panel ikut berganti saat pindah ke registrasi */
+.auth-overlay::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(150deg, #C1D72E 0%, #8fae1b 55%, #4d7c0f 100%);
+  opacity: 0;
+  transition: opacity 0.75s ease;
+}
+
+.auth-shell.is-register .auth-overlay {
+  transform: translateX(-100%);
+}
+
+.auth-shell.is-register .auth-overlay::before {
+  opacity: 1;
+}
+
+.auth-overlay-inner {
+  position: relative;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: 12px;
+  padding: 40px 34px 24px;
+  box-sizing: border-box;
+}
+
+.auth-overlay-inner .brand-logos {
+  padding: 10px 16px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  gap: 14px;
+}
+
+.auth-overlay-inner h3 {
+  font-size: 1.7rem;
+  font-weight: 800;
+  margin: 14px 0 0;
+  letter-spacing: -0.02em;
+}
+
+.auth-overlay-inner p {
+  font-size: 0.92rem;
+  line-height: 1.6;
+  max-width: 320px;
+  margin: 0;
+  opacity: 0.92;
+}
+
+/* Area terbang tombol: tinggi agar tombol bisa naik */
+.auth-fly-zone {
+  position: relative;
+  width: 100%;
+  height: 280px;
+  margin-top: 4px;
+}
+
+.auth-fly-zone .flying-button {
+  min-height: 0;
+}
+
+/* Lebar tetap agar label "Registrasi"/"Masuk" berganti tanpa menggeser posisi tombol */
+.auth-fly-zone .flying-button__craft {
+  width: 180px;
+  font-weight: 700;
+}
+
+.login-badge-lime {
+  background: rgba(193, 215, 46, 0.2);
+  color: #4d7c0f;
+}
+
+.auth-form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.auth-input {
+  padding-left: 14px;
+}
+
+.auth-info-alert {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  padding: 10px 12px;
+  margin-bottom: 14px;
+  border-radius: 12px;
+  background: rgba(0, 175, 160, 0.1);
+  border: 1px solid rgba(0, 175, 160, 0.3);
+  color: #0f766e;
+  font-size: 0.8rem;
+  line-height: 1.5;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .auth-overlay,
+  .auth-overlay::before,
+  .auth-pane {
+    transition: none;
+  }
+}
+
+/* Layar kecil: panel warna di atas, hanya satu form yang tampil */
+@media (max-width: 820px) {
+  .auth-shell {
+    grid-template-columns: minmax(0, 1fr);
+    min-height: 0;
+  }
+  .auth-form-row {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0;
+  }
+  .auth-overlay {
+    position: relative;
+    left: 0;
+    width: 100%;
+    height: auto;
+    order: -1;
+  }
+  .auth-shell.is-register .auth-overlay {
+    transform: none;
+  }
+  .auth-shell:not(.is-register) .auth-pane-register,
+  .auth-shell.is-register .auth-pane-login {
+    display: none;
+  }
+  .auth-fly-zone {
+    height: 220px;
+  }
+  .auth-pane {
+    padding: 28px 20px;
+  }
+}
+
+
+/* ─── Kartu penuh satu layar, tanpa latar dekoratif ─── */
+.login-page-root {
+  background: #FFFFFF;
+}
+
+.login-page-root .login-main-container {
+  padding: 0;
+  align-items: stretch;
+}
+
+.login-page-root .auth-shell {
+  max-width: none;
+  min-height: 100vh;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  background: #FFFFFF;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+.login-page-root .auth-pane {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  width: 100%;
+  max-width: 520px;
+  margin: 0 auto;
+  padding: 88px 40px 48px;
+}
+
+/* Tombol kembali: tetap di kiri atas. Di atas form putih (mode login) bergaya teal,
+   di atas panel warna (mode registrasi / layar kecil) bergaya kaca putih */
+.auth-back-home {
+  position: absolute;
+  top: 24px;
+  left: 28px;
+  z-index: 5;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 16px 9px 12px;
+  border-radius: 9999px;
+  background: rgba(0, 175, 160, 0.1);
+  border: 1px solid rgba(0, 175, 160, 0.3);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  font-size: 0.84rem;
+  font-weight: 700;
+  color: #0f766e;
+  text-decoration: none;
+  transition: background 0.45s ease, color 0.45s ease, border-color 0.45s ease, transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.auth-back-home svg {
+  transition: transform 0.2s ease;
+}
+
+.auth-back-home:hover {
+  background: #00AFA0;
+  border-color: #00AFA0;
+  color: #FFFFFF;
+  box-shadow: 0 6px 18px rgba(0, 175, 160, 0.3);
+  transform: translateY(-1px);
+}
+
+.auth-shell.is-register .auth-back-home {
+  background: rgba(255, 255, 255, 0.16);
+  border-color: rgba(255, 255, 255, 0.35);
+  color: #FFFFFF;
+}
+
+.auth-shell.is-register .auth-back-home:hover {
+  background: #FFFFFF;
+  border-color: #FFFFFF;
+  color: #4d7c0f;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.14);
+}
+
+.auth-back-home:hover svg {
+  transform: translateX(-3px);
+}
+
+.auth-back-home:focus-visible {
+  outline: 2px solid #00AFA0;
+  outline-offset: 3px;
+}
+
+@media (max-width: 820px) {
+  .login-page-root .auth-shell {
+    min-height: 100vh;
+  }
+  .login-page-root .auth-pane {
+    padding: 28px 20px;
+  }
+  .auth-overlay-inner {
+    padding-top: 64px;
+  }
+  .auth-shell .auth-back-home,
+  .auth-shell.is-register .auth-back-home {
+    top: 16px;
+    left: 16px;
+    background: rgba(255, 255, 255, 0.16);
+    border-color: rgba(255, 255, 255, 0.35);
+    color: #FFFFFF;
+  }
+}
