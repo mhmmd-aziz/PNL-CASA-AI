@@ -122,9 +122,16 @@ body {
   height: calc(100vh - 48px);
   max-height: 800px;
   z-index: 50;
+  transition: width 0.2s ease;
+}
+
+.dock-sidebar.is-expanded {
+  width: 260px;
 }
 
 .dock-panel {
+  overflow-y: auto;
+  scrollbar-width: thin;
   background: var(--bg-shell);
   border: 1px solid var(--border);
   border-radius: var(--radius-2xl);
@@ -206,6 +213,64 @@ body {
   background: var(--bg-hover);
   color: var(--teal);
   transform: translateY(-1px);
+}
+
+.dock-btn > svg {
+  flex-shrink: 0;
+}
+
+.dock-btn:focus-visible {
+  outline: 2px solid var(--teal);
+  outline-offset: -2px;
+}
+
+.dock-toggle {
+  margin-bottom: 8px;
+  background: var(--bg-hover);
+  color: var(--teal);
+}
+
+.dock-label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.is-expanded .dock-label {
+  position: static;
+  width: auto;
+  height: auto;
+  margin: 0;
+  overflow: visible;
+  clip-path: none;
+  white-space: normal;
+  font-size: 0.8rem;
+  font-weight: 600;
+  line-height: 1.4;
+  text-align: left;
+}
+
+.is-expanded .dock-btn {
+  width: 100%;
+  justify-content: flex-start;
+  gap: 12px;
+  padding: 8px 12px;
+  height: auto;
+  min-height: 44px;
+}
+
+.is-expanded .dock-divider {
+  width: 100%;
+}
+
+.is-expanded .dock-btn[data-tooltip]::before,
+.is-expanded .dock-btn[data-tooltip]::after {
+  display: none;
 }
 
 .dock-btn.active {
@@ -1520,6 +1585,26 @@ body {
     height: auto;
     position: static;
     max-height: none;
+  }
+  .dock-sidebar.is-expanded {
+    width: 100%;
+  }
+  .dock-sidebar.is-expanded .dock-panel {
+    flex-direction: column;
+    max-height: 65vh;
+    overflow-y: auto;
+    align-items: stretch;
+    justify-content: flex-start;
+  }
+  .is-expanded .dock-nav-group,
+  .is-expanded .dock-bottom-group {
+    flex-direction: column;
+    width: 100%;
+    flex-shrink: 0;
+  }
+  .is-expanded .dock-divider {
+    height: 1px;
+    margin: 8px 0;
   }
   .dock-panel {
     flex-direction: row;

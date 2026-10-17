@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import {
   LayoutGrid,
+  PanelLeftOpen,
+  PanelLeftClose,
   ScanEye,
   Microscope,
   Users,
@@ -274,6 +276,7 @@ export default function AdminDashboard({ onSwitchToPublic }) {
   // Navigation & Theme
   const [activeTab, setActiveTab] = useState('Overview');
   const [activeDock, setActiveDock] = useState('dashboard');
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isDarkMode, setIsDarkMode] = useState(false);
 
   // Synchronized navigation between dock and capsule tabs
@@ -621,8 +624,20 @@ export default function AdminDashboard({ onSwitchToPublic }) {
   return (
     <div className="dashboard-wrapper">
       {/* ─── 1. Left Vertical Dock Sidebar (Unified Modern Dock) ─── */}
-      <aside className="dock-sidebar">
+      <aside className={`dock-sidebar ${isSidebarOpen ? 'is-expanded' : ''}`} aria-label="Navigasi dashboard">
         <div className="dock-panel">
+          <button
+            type="button"
+            className="dock-btn dock-toggle"
+            aria-expanded={isSidebarOpen}
+            aria-controls="dashboard-navigation dashboard-utilities"
+            aria-label={isSidebarOpen ? 'Tutup navigasi' : 'Buka navigasi'}
+            title={isSidebarOpen ? 'Tutup navigasi' : 'Buka navigasi'}
+            onClick={() => setIsSidebarOpen((isOpen) => !isOpen)}
+          >
+            {isSidebarOpen ? <PanelLeftClose size={20} /> : <PanelLeftOpen size={20} />}
+            <span className="dock-label">Tutup navigasi</span>
+          </button>
           {/* Top: Brand Logo / Quick Identity */}
           <div 
             className="dock-brand-btn" 
@@ -638,7 +653,7 @@ export default function AdminDashboard({ onSwitchToPublic }) {
           <div className="dock-divider" />
 
           {/* Main Navigation Items Tailored per Role */}
-          <div className="dock-nav-group">
+          <nav className="dock-nav-group" id="dashboard-navigation" aria-label="Menu utama">
             {/* 1. Dashboard / Overview (All Roles) */}
             <button
               className={`dock-btn ${activeDock === 'dashboard' ? 'active' : ''}`}
@@ -647,6 +662,7 @@ export default function AdminDashboard({ onSwitchToPublic }) {
               onClick={() => navigateTo('Overview', 'dashboard')}
             >
               <LayoutGrid size={20} />
+              <span className="dock-label">{currentRole === 'dokter' ? "Dashboard Klinis" : currentRole === 'laboran' ? "Dashboard Lab" : "Overview Sistem"}</span>
             </button>
 
             {/* 2. DOKTER ONLY: Antrean Validasi Klinis (Perlu Tindakan) */}
@@ -658,6 +674,7 @@ export default function AdminDashboard({ onSwitchToPublic }) {
                 onClick={() => navigateTo('Perlu Validasi', 'validation')}
               >
                 <Stethoscope size={20} color="var(--teal)" />
+              <span className="dock-label">{`Validasi Diagnosa (${pendingValidationCount})`}</span>
               </button>
             )}
 
@@ -670,6 +687,7 @@ export default function AdminDashboard({ onSwitchToPublic }) {
                 onClick={() => navigateTo('Analysis Lab', 'analysis')}
               >
                 <ScanEye size={20} />
+              <span className="dock-label">Laboratorium Analisis</span>
               </button>
             )}
 
@@ -682,6 +700,7 @@ export default function AdminDashboard({ onSwitchToPublic }) {
                 onClick={() => navigateTo('Calibration', 'calibration')}
               >
                 <Sliders size={20} />
+              <span className="dock-label">Kalibrasi Mikroskop</span>
               </button>
             )}
 
@@ -693,6 +712,7 @@ export default function AdminDashboard({ onSwitchToPublic }) {
               onClick={() => navigateTo('Patient Records', 'patients')}
             >
               <Users size={20} />
+              <span className="dock-label">{currentRole === 'laboran' ? "Antrean Preparat" : "Rekam Medis Pasien"}</span>
             </button>
 
             {/* 6. WHO Quality Control (All Roles) */}
@@ -703,6 +723,7 @@ export default function AdminDashboard({ onSwitchToPublic }) {
               onClick={() => navigateTo('Quality Control', 'qc')}
             >
               <ShieldCheck size={20} />
+              <span className="dock-label">Kendali Mutu WHO</span>
             </button>
 
             {/* 7. DOKTER & ADMIN ONLY: Lab Reports & Digital Signature (STRICTLY HIDDEN FOR LABORAN) */}
@@ -714,6 +735,7 @@ export default function AdminDashboard({ onSwitchToPublic }) {
                 onClick={() => navigateTo('Lab Reports', 'reports')}
               >
                 <FileText size={20} />
+              <span className="dock-label">{currentRole === 'dokter' ? "Laporan Medis" : "Laporan Hasil Lab"}</span>
               </button>
             )}
 
@@ -726,6 +748,7 @@ export default function AdminDashboard({ onSwitchToPublic }) {
                 onClick={() => navigateTo('Calibration', 'calibration')}
               >
                 <Sliders size={20} />
+              <span className="dock-label">Kalibrasi Hardware</span>
               </button>
             )}
 
@@ -738,6 +761,7 @@ export default function AdminDashboard({ onSwitchToPublic }) {
                 onClick={() => navigateTo('User Management', 'users')}
               >
                 <UserCheck size={20} color="var(--teal)" />
+              <span className="dock-label">Kelola Pengguna</span>
               </button>
             )}
 
@@ -750,15 +774,16 @@ export default function AdminDashboard({ onSwitchToPublic }) {
                 onClick={() => navigateTo('Server Logs', 'server')}
               >
                 <Cpu size={20} color="#C1D72E" />
+              <span className="dock-label">Telemetri Server</span>
               </button>
             )}
-          </div>
+          </nav>
 
           {/* Spacer */}
           <div className="dock-spacer" />
 
           {/* Bottom Utility Actions */}
-          <div className="dock-bottom-group">
+          <div className="dock-bottom-group" id="dashboard-utilities">
             <div className="dock-divider" />
 
             <button
@@ -769,6 +794,7 @@ export default function AdminDashboard({ onSwitchToPublic }) {
               style={{ color: 'var(--teal)' }}
             >
               <Home size={19} />
+              <span className="dock-label">Beranda Utama (/)</span>
             </button>
 
             <button
@@ -778,6 +804,7 @@ export default function AdminDashboard({ onSwitchToPublic }) {
               onClick={() => setIsDarkMode(!isDarkMode)}
             >
               {isDarkMode ? <Sun size={19} color="#C1D72E" /> : <Moon size={19} color="#00AFA0" />}
+              <span className="dock-label">{isDarkMode ? 'Mode Terang' : 'Mode Gelap'}</span>
             </button>
 
             <button
@@ -787,6 +814,7 @@ export default function AdminDashboard({ onSwitchToPublic }) {
               onClick={() => setShowRoleModal(true)}
             >
               <KeyRound size={19} />
+              <span className="dock-label">Ganti Peran Medis</span>
             </button>
 
             <button
@@ -796,6 +824,7 @@ export default function AdminDashboard({ onSwitchToPublic }) {
               onClick={() => setShowGuidelinesModal(true)}
             >
               <HelpCircle size={19} />
+              <span className="dock-label">Panduan Standar WHO</span>
             </button>
 
             <button
@@ -806,6 +835,7 @@ export default function AdminDashboard({ onSwitchToPublic }) {
               style={{ color: '#EF4444' }}
             >
               <LogOut size={19} />
+              <span className="dock-label">Keluar Akun</span>
             </button>
           </div>
         </div>

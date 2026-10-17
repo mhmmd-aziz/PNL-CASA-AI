@@ -16,7 +16,7 @@ train model/dataset/
 *.avi
 *.mp4
 *.webm
-*.pt
+#*.pt
 *.onnx
 *.cache
 *.pdf
@@ -36,3 +36,6 @@ backend/uploads/
 backend/data/calibration.json
 runs/
 train model/runs/
+
+*.CLAUDE.md 
+
