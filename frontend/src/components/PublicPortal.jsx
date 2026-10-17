@@ -25,7 +25,6 @@ import {
   Layers,
   ShieldCheck,
   Check,
-  Star,
   ChevronDown,
   ChevronUp,
   Clock,
@@ -36,7 +35,7 @@ import {
   Flame,
   FileSpreadsheet
 } from 'lucide-react';
-import { getCurrentUser } from '../auth';
+import { getRoleMode } from '../auth';
 import '../public-portal.css';
 import { useCalibration, getErrorMessage, formatMotility } from '../calibration';
 import { CalibrationFields, CalibrationStatus, CalibrationSummary, MotionAvailability, KinematicsMetrics } from './CalibrationControls';
@@ -46,8 +45,7 @@ export default function PublicPortal({ onSwitchToDashboard }) {
   const navigate = useNavigate();
 
   const handleGoToDashboard = () => {
-    const user = getCurrentUser();
-    if (user) {
+    if (getRoleMode()) {
       if (onSwitchToDashboard) {
         onSwitchToDashboard();
       } else {
@@ -116,38 +114,6 @@ export default function PublicPortal({ onSwitchToDashboard }) {
     } else {
       setError('Harap masukkan file video (MP4/AVI) atau gambar (JPG/PNG) yang valid.');
     }
-  };
-
-  const handleLoadDemo = () => {
-    setError(null);
-    setLoading(true);
-    setLoadingMsg('Memuat sampel preparat Makler 10µm demo...');
-    setTimeout(() => {
-      setResults({
-        data: {
-          summary: {
-            total_sperm: 164,
-            estimated_concentration: 27.3,
-            progressive_percent: 48.8,
-            non_progressive_percent: 23.2,
-            immotile_percent: 28.0,
-            analysis_duration: 3.42
-          },
-          motion: {
-            average_speed: 41.2,
-            maximum_speed: 72.8,
-            average_distance: 78.4,
-            average_track_frames: 46
-          }
-        },
-        video_url: '/images/lab_specialist.jpg',
-        original_url: '/images/lab_specialist.jpg',
-        heatmap_url: null,
-        is_image: false,
-        is_demo: true
-      });
-      setLoading(false);
-    }, 800);
   };
 
   const analyzeVideo = async () => {
@@ -387,10 +353,10 @@ export default function PublicPortal({ onSwitchToDashboard }) {
               <button 
                 onClick={handleGoToDashboard}
                 className="hero-login-pill-btn"
-                title={getCurrentUser() ? `Dashboard (${getCurrentUser().name})` : "Masuk ke Dashboard Staf Medis"}
+                title={getRoleMode() ? 'Buka Dashboard Medis' : "Masuk ke Dashboard Staf Medis"}
               >
                 <Lock size={14} />
-                <span>{getCurrentUser() ? 'Dashboard Medis' : 'Login Staf Medis'}</span>
+                <span>{getRoleMode() ? 'Dashboard Medis' : 'Login Staf Medis'}</span>
                 <ArrowRight size={14} />
               </button>
             </div>
@@ -420,28 +386,13 @@ export default function PublicPortal({ onSwitchToDashboard }) {
                   <span>Mulai Uji Skrining AI</span>
                   <ArrowRight size={16} />
                 </a>
-
-                <button onClick={handleLoadDemo} className="btn-cta-glass">
-                  <Play size={16} color="#00AFA0" />
-                  <span>Muat Sampel Demo</span>
-                </button>
               </div>
 
               {/* Quick Specs Highlight Bar */}
               <div className="hero-micro-specs">
                 <div className="spec-item">
-                  <span className="spec-val">14.2 ms</span>
-                  <span className="spec-lbl">Inferensi GPU per Frame</span>
-                </div>
-                <div className="spec-divider" />
-                <div className="spec-item">
                   <span className="spec-val">WHO 6th</span>
                   <span className="spec-lbl">Batas Rujukan 2021</span>
-                </div>
-                <div className="spec-divider" />
-                <div className="spec-item">
-                  <span className="spec-val">99.4%</span>
-                  <span className="spec-lbl">Akurasi Deteksi Kepala</span>
                 </div>
               </div>
             </div>
@@ -478,14 +429,6 @@ export default function PublicPortal({ onSwitchToDashboard }) {
 
               {/* Quick Trust Stats Strip */}
               <div className="hero-trust-stats-strip">
-                <div className="trust-stat-item">
-                  <div className="trust-stat-icon"><Users size={18} color="#00AFA0" /></div>
-                  <div className="trust-stat-info">
-                    <span className="trust-stat-val">120+</span>
-                    <span className="trust-stat-lbl">Klinik & Lab Terhubung</span>
-                  </div>
-                </div>
-                <div className="trust-stat-divider" />
                 <div className="trust-stat-item">
                   <div className="trust-stat-icon"><Activity size={18} color="#C1D72E" /></div>
                   <div className="trust-stat-info">
@@ -709,7 +652,7 @@ export default function PublicPortal({ onSwitchToDashboard }) {
           <div className="section-header-center">
             <span className="section-pill-tag">
               <Microscope size={14} color="#00AFA0" />
-              <span>LIVE AI DEMO & SCREENING</span>
+              <span>UJI SKRINING AI</span>
             </span>
             <h2 className="section-heading-large">
               Uji Sampel Semen (CASA Deep Screening)
@@ -783,7 +726,6 @@ export default function PublicPortal({ onSwitchToDashboard }) {
               </div>
 
               <ParameterHelp name="analyze" />
-              <ParameterHelp name="demo" />
               {/* Control Buttons Bar */}
               <div className="screening-actions-bar">
                 <button 
@@ -793,15 +735,6 @@ export default function PublicPortal({ onSwitchToDashboard }) {
                 >
                   <Settings size={17} color="#00AFA0" />
                   <span>Kalibrasi Bilik & Parameter Analisis</span>
-                </button>
-
-                <button
-                  type="button"
-                  className="btn-demo-sample"
-                  onClick={handleLoadDemo}
-                >
-                  <Sparkles size={16} color="#C1D72E" />
-                  <span>Muat Sampel Demo (Makler 10µm)</span>
                 </button>
               </div>
 
@@ -839,14 +772,6 @@ export default function PublicPortal({ onSwitchToDashboard }) {
             /* Results Display Panel */
             <div className="screening-results-wrapper">
               
-              {/* Top Banner Alert for Demo */}
-              {results.is_demo && (
-                <div className="demo-notice-banner">
-                  <Sparkles size={16} color="#061019" />
-                  <span>Menampilkan Data Simulasi Sampel Preparat Bilik Makler 10µm (data simulasi, bukan hasil inferensi)</span>
-                </div>
-              )}
-
               <CalibrationSummary data={results.data} />
               <KinematicsMetrics data={results.data} extendedOnly />
               <MotionAvailability data={results.data} />
@@ -1123,131 +1048,6 @@ export default function PublicPortal({ onSwitchToDashboard }) {
         </div>
       </section>
 
-      {/* ─── 6. SOCIAL PROOF & TESTIMONIALS (Our Positive Social Impact) ─── */}
-      <section className="clean-white-section" id="testimonials">
-        <div className="section-container">
-          
-          <div className="social-impact-header">
-            <div className="social-impact-left">
-              <span className="section-pill-tag">
-                <Star size={14} color="#C1D72E" fill="#C1D72E" />
-                <span>KEPERCAYAAN KLINIS</span>
-              </span>
-              <h2 className="section-heading-large">
-                Pengakuan Klinis & Kepercayaan Laboratorium
-              </h2>
-              <p className="section-subheading-max">
-                Dipercaya oleh lebih dari 120+ klinik fertilitas IVF, laboratorium patologi klinis, dan dokter spesialis andrologi di seluruh Indonesia.
-              </p>
-            </div>
-
-            <div className="trustpilot-rating-badge">
-              <div className="trust-stars-row">
-                <Star size={18} fill="#00AFA0" color="#00AFA0" />
-                <Star size={18} fill="#00AFA0" color="#00AFA0" />
-                <Star size={18} fill="#00AFA0" color="#00AFA0" />
-                <Star size={18} fill="#00AFA0" color="#00AFA0" />
-                <Star size={18} fill="#00AFA0" color="#00AFA0" />
-              </div>
-              <div className="trust-score-text">Akreditasi <strong>5.0 / 5.0</strong> Medis</div>
-              <span className="trust-sub">Berdasarkan 340+ Ulasan Spesialis</span>
-            </div>
-          </div>
-
-          {/* Testimonial Cards Grid */}
-          <div className="testimonials-grid">
-            
-            <div className="testimonial-card">
-              <div className="testimonial-quote-mark">“</div>
-              <p className="testimonial-text">
-                Sistem CASA-AI memotong durasi skrining motilitas dari 25 menit menjadi di bawah 10 detik. Parameter trajektori VCL dan VSL sangat konsisten dan menghilangkan keraguan evaluasi manual antar-shift analis.
-              </p>
-              <div className="testimonial-author">
-                <div className="author-avatar av-doctor"><Stethoscope size={18} /></div>
-                <div>
-                  <h4 className="author-name">Dr. Hendra Wijaya, Sp.And</h4>
-                  <span className="author-role">Dokter Spesialis Andrologi • RSIA Graha Fertilitas</span>
-                </div>
-              </div>
-            </div>
-
-            <div className="testimonial-card">
-              <div className="testimonial-quote-mark">“</div>
-              <p className="testimonial-text">
-                Kalibrasi bilik Makler 10µm dan deteksi spermatozoa otomatis sangat membantu eliminasi variasi antar-observer. Ekspor laporan berstandar WHO 6th membuat komunikasi dengan pasien menjadi jauh lebih jelas dan terpercaya.
-              </p>
-              <div className="testimonial-author">
-                <div className="author-avatar av-lab"><Microscope size={18} /></div>
-                <div>
-                  <h4 className="author-name">Sarah Amanda, S.Tr.Kes</h4>
-                  <span className="author-role">Kepala Analis Laboratorium Andrologi & IVF</span>
-                </div>
-              </div>
-            </div>
-
-            <div className="testimonial-card">
-              <div className="testimonial-quote-mark">“</div>
-              <p className="testimonial-text">
-                Integrasi rekam medis pasien dengan tanda tangan digital mempermudah validasi hasil laboratorium rujukan. Sistem audit trail kendali mutu (QC) memenuhi standar akreditasi rumah sakit.
-              </p>
-              <div className="testimonial-author">
-                <div className="author-avatar av-doctor-2"><Award size={18} /></div>
-                <div>
-                  <h4 className="author-name">dr. Budi Pratama, Sp.PK</h4>
-                  <span className="author-role">Dokter Spesialis Patologi Klinik</span>
-                </div>
-              </div>
-            </div>
-
-          </div>
-
-        </div>
-      </section>
-
-      {/* ─── 7. AWARDS & RECOGNITION RIBBON (Dark Banner Matching Screenshot) ─── */}
-      <div className="ribbon-outer-wrapper">
-        <div className="dark-accreditation-ribbon">
-          <div className="ribbon-title-col">
-            <span className="ribbon-heading">Akreditasi & Standar</span>
-            <span className="ribbon-sub">Pengakuan Mutu Laboratorium Medis</span>
-          </div>
-
-          <div className="ribbon-badges-row">
-            <div className="ribbon-badge-item">
-              <Award size={20} color="#C1D72E" />
-              <div className="badge-item-text">
-                <strong>WHO 6th Manual</strong>
-                <span>Standar Global 2021</span>
-              </div>
-            </div>
-
-            <div className="ribbon-badge-item">
-              <ShieldCheck size={20} color="#00AFA0" />
-              <div className="badge-item-text">
-                <strong>ISO 15189</strong>
-                <span>Medical Laboratories</span>
-              </div>
-            </div>
-
-            <div className="ribbon-badge-item">
-              <FileCheck size={20} color="#C1D72E" />
-              <div className="badge-item-text">
-                <strong>PERANDI</strong>
-                <span>Rujukan Andrologi ID</span>
-              </div>
-            </div>
-
-            <div className="ribbon-badge-item">
-              <CheckCircle2 size={20} color="#00AFA0" />
-              <div className="badge-item-text">
-                <strong>KARS Paripurna</strong>
-                <span>Standar Mutu RS</span>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
       {/* ─── 8. INTERACTIVE FAQ ACCORDION ─── */}
       <section className="clean-white-section" id="faq-section">
         <div className="section-container" style={{ maxWidth: '860px' }}>
@@ -1325,7 +1125,6 @@ export default function PublicPortal({ onSwitchToDashboard }) {
                 <li><a href="#showcase">Fitur Analisis</a></li>
                 <li><a href="#skrining-tool">Uji Skrining AI</a></li>
                 <li><a href="#who-standard">Standar Rujukan WHO 6th</a></li>
-                <li><a href="#testimonials">Pengakuan Klinis</a></li>
                 <li><a href="#faq-section">FAQ</a></li>
               </ul>
             </div>

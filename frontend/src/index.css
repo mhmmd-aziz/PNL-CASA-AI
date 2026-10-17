@@ -279,6 +279,79 @@ body {
 }
 
 
+/* Sidebar header, label menu, dan mode terbuka */
+.dock-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  justify-content: center;
+}
+
+.dock-brand-label,
+.dock-btn-label {
+  display: none;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dock-toggle-btn {
+  margin-top: 8px;
+}
+
+.dock-sidebar {
+  transition: width 0.2s ease;
+}
+
+.dock-sidebar.expanded {
+  width: 220px;
+}
+
+.dock-sidebar.expanded .dock-panel {
+  align-items: stretch;
+  padding: 14px 10px;
+}
+
+.dock-sidebar.expanded .dock-header {
+  justify-content: flex-start;
+  padding-left: 2px;
+}
+
+.dock-sidebar.expanded .dock-brand-label {
+  display: block;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.dock-sidebar.expanded .dock-nav-group,
+.dock-sidebar.expanded .dock-bottom-group {
+  align-items: stretch;
+}
+
+.dock-sidebar.expanded .dock-btn {
+  width: 100%;
+  justify-content: flex-start;
+  gap: 12px;
+  padding: 0 12px;
+}
+
+.dock-sidebar.expanded .dock-btn-label {
+  display: block;
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.dock-sidebar.expanded .dock-divider {
+  width: 100%;
+}
+
+.dock-sidebar.expanded .dock-btn[data-tooltip]::before,
+.dock-sidebar.expanded .dock-btn[data-tooltip]::after {
+  display: none;
+}
+
 /* Main Content Surface */
 .dashboard-surface {
   flex: 1;
@@ -1542,6 +1615,23 @@ body {
     margin: 0 4px;
   }
   .dock-spacer {
+    display: none;
+  }
+  .dock-sidebar.expanded {
+    width: 100%;
+  }
+  .dock-sidebar.expanded .dock-panel {
+    align-items: center;
+    padding: 8px 12px;
+  }
+  .dock-sidebar.expanded .dock-btn {
+    width: 44px;
+    justify-content: center;
+    padding: 0;
+  }
+  .dock-sidebar.expanded .dock-btn-label,
+  .dock-sidebar.expanded .dock-brand-label,
+  .dock-toggle-btn {
     display: none;
   }
   .dock-btn[data-tooltip]::before,

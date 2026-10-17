@@ -1,179 +1,119 @@
-// Authentication & Role-Based Access Control (RBAC) System
+// Role-Based Access Control (RBAC): definisi peran, menu, dan izin per peran.
+// Catatan: pembatasan ini baru di sisi UI; otorisasi tetap wajib diterapkan di server/API.
 
 export const ROLES = {
-  admin: {
-    id: 'admin',
-    name: 'Administrator Sistem & Lab',
-    user: 'Bambang Pratama, S.Kom.',
-    username: 'admin',
-    email: 'admin@casa.lab',
-    password: 'admin123',
-    badge: 'ADMIN SISTEM',
-    badgeColor: '#0F172A',
+  frontoffice: {
+    id: 'frontoffice',
+    name: 'Petugas Front Office / Admin Laboratorium',
+    badge: 'FRONT OFFICE',
+    badgeColor: '#2563EB',
     badgeTextColor: '#FFFFFF',
-    avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop&q=80',
-    description: 'Manajemen pengguna, audit log, konfigurasi server AI & database, dan pemantauan sistem laboratorium.',
-    scope: 'Sistem & Manajemen Pengguna',
-    permissions: {
-      canRunInference: true,
-      canCalibrate: true,
-      canValidateDiagnosis: false,
-      canSignReport: false,
-      canManageUsers: true,
-      canViewAuditLogs: true,
-      canExportData: true
-    },
-    allowedFeatures: [
-      'Kelola akun pengguna & peran staf',
-      'Audit log aktivitas & status server AI',
-      'Manajemen database & riwayat rekam pasien',
-      'Ekspor laporan agregat laboratorium (CSV/Excel)'
-    ],
-    restrictedFeatures: [
-      'Tidak memiliki wewenang klinis untuk pengesahan diagnosa medis akhir pasien'
-    ]
+    description: 'Mendaftarkan pasien/pemeriksaan, mengelola detail registrasi, mencatat serah terima sampel, dan mencetak label/kode batang sampel.',
+    scope: 'Registrasi Pasien & Sampel',
+    tabs: ['Registration'],
+    permissions: { registerPatients: true },
+    restrictedFeatures: ['Tidak dapat mengubah atau merilis hasil medis']
+  },
+  analis: {
+    id: 'analis',
+    name: 'Analis Laboratorium / ATLM',
+    badge: 'ANALIS / ATLM',
+    badgeColor: '#C1D72E',
+    badgeTextColor: '#121F0E',
+    description: 'Memasukkan data makroskopis, memilih profil kalibrasi yang diizinkan, mengunggah media, menjalankan analisis, meninjau deteksi, dan mengirim hasil untuk ditinjau dokter.',
+    scope: 'Pemeriksaan & Analisis Sampel',
+    tabs: ['Overview', 'Analysis Lab', 'Patient Records', 'Quality Control'],
+    permissions: { runAnalysis: true, viewResults: true, submitForReview: true },
+    restrictedFeatures: ['Tidak dapat merilis laporan akhir', 'Tidak dapat mengubah preset kalibrasi']
   },
   dokter: {
     id: 'dokter',
-    name: 'Dokter Spesialis Andrologi',
-    user: 'Dr. Sajibur Rahman, Sp.And',
-    username: 'dokter',
-    email: 'dokter@casa.lab',
-    password: 'dokter123',
-    badge: 'DOKTER SPESIALIS',
+    name: 'Dokter Penanggung Jawab',
+    badge: 'DOKTER PJ',
     badgeColor: '#00AFA0',
     badgeTextColor: '#FFFFFF',
-    avatar: 'https://images.unsplash.com/photo-1612349317150-e413f6a5b16d?w=100&auto=format&fit=crop&q=80',
-    description: 'Validasi klinis standar WHO 6th edition, inspeksi kinematika motilitas sel, pengesahan hasil lab & tanda tangan digital laporan.',
-    scope: 'Validasi Klinis & Diagnosa Medis',
-    permissions: {
-      canRunInference: true,
-      canCalibrate: false,
-      canValidateDiagnosis: true,
-      canSignReport: true,
-      canManageUsers: false,
-      canViewAuditLogs: false,
-      canExportData: true
-    },
-    allowedFeatures: [
-      'Validasi & persetujuan diagnosis klinis sperma (Approve / Reject)',
-      'Penandatanganan digital laporan resmi laboratorium',
-      'Input catatan evaluasi medis dokter spesialis andrologi',
-      'Pemeriksaan detail kurva kinematika sperma (VCL, VSL, VAP)'
-    ],
-    restrictedFeatures: [
-      'Tidak dapat mengubah kalibrasi teknis hardware mikroskop (dikelola analis lab)',
-      'Tidak mengelola akun user sistem'
-    ]
+    description: 'Meninjau hasil yang dikirim, memasukkan/menyetujui interpretasi klinis, menandatangani secara digital, mengembalikan kasus untuk diperbaiki, dan merilis laporan.',
+    scope: 'Validasi Klinis & Rilis Laporan',
+    tabs: ['Overview', 'Perlu Validasi', 'Patient Records', 'Lab Reports'],
+    permissions: { viewResults: true, reviewResults: true, signReports: true, releaseReports: true },
+    restrictedFeatures: ['Tidak dapat mengubah preset kalibrasi', 'Tidak mengelola akun pengguna']
   },
-  laboran: {
-    id: 'laboran',
-    name: 'Tenaga Medis / Analis Mikroskop',
-    user: 'Nurul Hidayati, A.Md.AK',
-    username: 'laboran',
-    email: 'laboran@casa.lab',
-    password: 'laboran123',
-    badge: 'ANALIS MIKROSKOP',
-    badgeColor: '#C1D72E',
-    badgeTextColor: '#121F0E',
-    avatar: 'https://images.unsplash.com/photo-1594824813576-431871ad2bfd?w=100&auto=format&fit=crop&q=80',
-    description: 'Preparasi bilik preparat Makler/Leja, perekaman video mikroskopis, upload inferensi AI, dan kalibrasi optik mikroskop.',
-    scope: 'Operasional Mikroskop & Inferensi AI',
-    permissions: {
-      canRunInference: true,
-      canCalibrate: true,
-      canValidateDiagnosis: false,
-      canSignReport: false,
-      canManageUsers: false,
-      canViewAuditLogs: false,
-      canExportData: true
-    },
-    allowedFeatures: [
-      'Operasional analisis video mikroskopis & deteksi spermatozoa AI',
-      'Kalibrasi bilik hitung preparat (Makler 10µm / Leja 20µm) & skala piksel',
-      'Input data fisik semen (volume, warna, bau, pH, viskositas, likuefaksi)',
-      'Monitoring inferensi frame-by-frame dan peta panas pergerakan'
-    ],
-    restrictedFeatures: [
-      'Hasil analisa berstatus "Menunggu Verifikasi Dokter" sebelum disahkan',
-      'Tidak dapat menandatangani diagnosis klinis resmi pasien'
-    ]
+  pasien: {
+    id: 'pasien',
+    name: 'Pasien',
+    badge: 'PASIEN',
+    badgeColor: '#64748B',
+    badgeTextColor: '#FFFFFF',
+    description: 'Melihat dan mengunduh laporan miliknya sendiri yang telah dirilis.',
+    scope: 'Laporan Pribadi',
+    tabs: ['My Reports'],
+    permissions: { viewOwnReports: true },
+    restrictedFeatures: ['Tidak dapat mengakses video mentah atau data analisis internal']
+  },
+  superadmin: {
+    id: 'superadmin',
+    name: 'Super Admin / Kepala Laboratorium',
+    badge: 'SUPER ADMIN',
+    badgeColor: '#0F172A',
+    badgeTextColor: '#FFFFFF',
+    description: 'Mengelola pengguna dan peran, memantau log audit, mengonfigurasi/mengunci preset kalibrasi yang disetujui, serta mengelola pengaturan sistem.',
+    scope: 'Pengguna, Audit & Pengaturan Sistem',
+    tabs: ['User Management', 'Server Logs', 'Calibration', 'Quality Control'],
+    permissions: { manageUsers: true, viewAuditLogs: true, editCalibration: true },
+    restrictedFeatures: ['Hak administratif tidak memberi izin mengubah atau menandatangani hasil klinis']
   }
 };
 
+export function hasPermission(roleId, permission) {
+  return Boolean(ROLES[roleId]?.permissions[permission]);
+}
+
+export function canAccessTab(roleId, tabId) {
+  return Boolean(ROLES[roleId]?.tabs.includes(tabId));
+}
+
 const STORAGE_KEY = 'casa_ai_auth_user';
+const ROLE_MODE_KEY = 'casa_ai_role_mode';
+
+function getStorage() {
+  return typeof window !== 'undefined' && window.localStorage ? window.localStorage : null;
+}
 
 export function getAccounts() {
   return Object.values(ROLES);
 }
 
+// Autentikasi server belum tersedia, sehingga tidak ada sesi akun yang dianggap sah.
 export function getCurrentUser() {
-  if (typeof window === 'undefined' || !window.localStorage) return null;
-  try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw);
-    if (parsed && parsed.role && ROLES[parsed.role]) {
-      return {
-        ...ROLES[parsed.role],
-        ...parsed
-      };
-    }
-  } catch {
-    // fallback
-  }
   return null;
 }
 
-export function login(usernameOrEmail, password) {
-  const cleanInput = (usernameOrEmail || '').trim().toLowerCase();
-  const cleanPass = (password || '').trim();
-
-  const matched = Object.values(ROLES).find((r) => {
-    return (
-      (r.username.toLowerCase() === cleanInput || r.email.toLowerCase() === cleanInput) &&
-      r.password === cleanPass
-    );
-  });
-
-  if (matched) {
-    const userSession = {
-      role: matched.id,
-      name: matched.user,
-      email: matched.email,
-      loginAt: new Date().toISOString()
-    };
-    if (typeof window !== 'undefined' && window.localStorage) {
-      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(userSession));
-    }
-    return { success: true, user: matched };
-  }
-
-  return { 
-    success: false, 
-    error: 'Username/Email atau Password tidak cocok. Silakan gunakan akun demo yang tersedia.' 
+export function login() {
+  return {
+    success: false,
+    error: 'Autentikasi akun belum tersedia. Gunakan mode peran untuk mengakses dashboard.'
   };
 }
 
-export function loginAsRole(roleId) {
-  if (ROLES[roleId]) {
-    const matched = ROLES[roleId];
-    const userSession = {
-      role: matched.id,
-      name: matched.user,
-      email: matched.email,
-      loginAt: new Date().toISOString()
-    };
-    if (typeof window !== 'undefined' && window.localStorage) {
-      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(userSession));
-    }
-    return { success: true, user: matched };
+// Mode peran hanya mengatur tampilan dashboard, bukan identitas pengguna.
+export function getRoleMode() {
+  try {
+    const roleId = getStorage()?.getItem(ROLE_MODE_KEY);
+    return ROLES[roleId] ? roleId : null;
+  } catch {
+    return null;
   }
-  return { success: false, error: 'Role tidak ditemukan' };
+}
+
+export function setRoleMode(roleId) {
+  if (!ROLES[roleId]) return false;
+  getStorage()?.setItem(ROLE_MODE_KEY, roleId);
+  return true;
 }
 
 export function logout() {
-  if (typeof window !== 'undefined' && window.localStorage) {
-    window.localStorage.removeItem(STORAGE_KEY);
-  }
+  const storage = getStorage();
+  if (!storage) return;
+  storage.removeItem(ROLE_MODE_KEY);
+  storage.removeItem(STORAGE_KEY);
 }
