@@ -77,12 +77,6 @@ export const PARAMETER_HELP = {
     how: 'Unggah media, periksa kalibrasi dan confidence, lalu jalankan. Hasil merekam parameter yang benar-benar digunakan. Jalankan ulang bila ingin memakai pengaturan berbeda.',
     example: 'Citra tunggal hanya mendukung hitungan dan konsentrasi. Motilitas memakai segmen kontinu terpanjang per ID dengan minimal 15 pengamatan. Hitungan deteksi dan jumlah lintasan yang dinilai ditampilkan terpisah.',
   },
-  demo: {
-    title: 'Muat Sampel Demo',
-    purpose: 'Menampilkan data simulasi untuk mencoba antarmuka.',
-    how: 'Gunakan untuk mengenal tampilan hasil. Untuk menganalisis sampel Anda, unggah file lalu klik Jalankan Analisis AI.',
-    example: 'Demo tidak menjalankan inferensi pada file Anda dan tidak dapat disimpan sebagai hasil pemeriksaan aktual.',
-  },
   unavailable: {
     title: 'Mengapa ada metrik belum tersedia?',
     purpose: 'Membedakan angka yang benar-benar diukur dari parameter yang belum dihitung atau tidak dapat diukur pada media ini.',
