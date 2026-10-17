@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import axios from 'axios';
+import { API_BASE_URL } from './api.js';
 
 export const DEFAULT_CALIBRATION = {
   pixel_scale: 0.8,
@@ -14,7 +15,7 @@ export const DEFAULT_CALIBRATION = {
 };
 
 export const CHAMBER_DEPTHS = { makler: 10, leja: 20, neubauer: 100 };
-const CALIBRATION_URL = 'http://localhost:8000/api/calibration';
+const CALIBRATION_URL = `${API_BASE_URL}/api/calibration`;
 
 export function getErrorMessage(error) {
   const detail = error.response?.data?.detail;

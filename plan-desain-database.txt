@@ -1,0 +1,762 @@
+**Setuju, tidak perlu UUID. Kita gunakan ID integer otomatis.** Dan kamu benar: ada **5 role**, termasuk **Pasien (optional portal)**. Saya keliru tidak memasukkannya ke daftar role sebelumnya.
+
+Setelah membaca ulang `PRD.md`, `CLAUDE.md` root, dan catatan pipeline, **rancangan 19 tabel memang bisa disederhanakan**.
+
+**1. Apakah 19 Tabel Diwajibkan Dokumen?**
+
+**Tidak.** Angka 19 itu hasil pemisahan teknis yang saya usulkan, bukan ketentuan dokumen.
+
+`PRD.md:343` menyebut **entitas logis yang disarankan**, bukan jumlah tabel fisik yang wajib dibuat. Bahkan, data makroskopik dicantumkan sebagai bagian dari pemeriksaan, sehingga tidak harus menjadi tabel sendiri.
+
+Sementara itu:
+- `PRD.md` dan `CLAUDE.md` root menjadi acuan alur aplikasi, akses, review, persetujuan, dan laporan.
+- `train model/claude.md:407` menjelaskan keluaran JSON dari pipeline AI, bukan rancangan seluruh database aplikasi.
+
+**Pendapat saya: rancangan sebelumnya terlalu terurai untuk tahap awal proyek kamu.** Kita bisa menggabungkan beberapa bagian tanpa menghilangkan kebutuhan penting.
+
+**2. Lima Role yang Kita Siapkan**
+
+Sesuai `PRD.md:63` dan `CLAUDE.md:68`:
+
+| Role | Akses utama |
+|---|---|
+| **Front Office / Lab Admin** | Mendaftarkan pasien, pemeriksaan, dan sampel |
+| **Analis / ATLM** | Mengisi makroskopik, menjalankan analisis, mengoreksi, mengajukan hasil |
+| **Dokter Penanggung Jawab** | Meninjau, menyetujui, menandatangani, dan merilis laporan |
+| **Pasien — portal opsional** | Melihat/mengunduh laporan miliknya yang sudah dirilis |
+| **Super Admin / Kepala Lab** | Mengelola akun, konfigurasi, dan audit; tidak otomatis boleh menyetujui hasil medis |
+
+Untuk versi awal, saya usulkan **satu akun memiliki satu role**, disimpan langsung pada `users.role`. Jadi, belum perlu tabel `roles` dan `user_roles`.
+
+**Yang opsional adalah portal/login pasien, bukan penyimpanan data pasien.** Pasien tetap dicatat meskipun belum mempunyai akun.
+
+**3. Rekomendasi Revisi: 12 Tabel**
+
+Tetap **satu database SQLite**, misalnya `casa_ai.db`, dengan 12 tabel di dalamnya—bukan 12 database terpisah.
+
+| No. | Tabel | Data yang disimpan |
+|---|---|---|
+| 1 | `users` | Akun, hash password, role, status aktif |
+| 2 | `auth_sessions` | Sesi login, hash token, kedaluwarsa, pencabutan sesi |
+| 3 | `patients` | Data pasien, nomor rekam medis, hubungan opsional ke akun portal |
+| 4 | `examinations` | Pemeriksaan, kode sampel, data makroskopik, waktu, status |
+| 5 | `calibration_profiles` | Profil kalibrasi, parameter, versi, status penguncian |
+| 6 | `media_assets` | Metadata dan lokasi privat video, citra, serta file keluaran |
+| 7 | `analysis_runs` | Eksekusi AI, progres, hasil per-media, snapshot kalibrasi, versi model |
+| 8 | `analysis_revisions` | Versi hasil pemeriksaan, hasil gabungan, snapshot data yang ditinjau |
+| 9 | `revision_inputs` | Hubungan revisi dengan hasil analisis yang digunakan |
+| 10 | `review_events` | Koreksi analis, catatan review, alasan pengembalian hasil oleh dokter |
+| 11 | `reports` | Versi laporan, revisi hasil, persetujuan dokter, metadata tanda tangan, status rilis |
+| 12 | `audit_logs` | Aktivitas penting, pelaku, waktu, dan perubahan status |
+
+Pembagiannya: **10 tabel alur bisnis + 2 tabel akun/sesi dan audit yang mendukung keamanan**, dengan `users` juga menjadi bagian pengelolaan pengguna.
+
+**4. Apa yang Digabung dari Rancangan Sebelumnya?**
+
+| Rancangan sebelumnya | Penyederhanaan |
+|---|---|
+| `roles` dan `user_roles` | Menjadi kolom `users.role`, dengan asumsi satu role per akun |
+| `macroscopic_results` | Kolom langsung pada `examinations` |
+| `calibration_snapshots` | Snapshot terstruktur pada `analysis_runs` |
+| `analysis_metrics` | Kolom numerik utama langsung pada `analysis_runs` |
+| `analysis_artifacts` | File keluaran dicatat pada `media_assets` dan dihubungkan ke run |
+| `clinical_approvals` | Kolom persetujuan pada setiap versi `reports` |
+
+Untuk persetujuan, asumsi awalnya **satu persetujuan dokter per versi laporan**, dan laporan menunjuk revisi hasil yang disetujui. Jika nanti dibutuhkan banyak penandatangan atau beberapa tahap persetujuan, barulah tabel persetujuan terpisah diperlukan.
+
+JSON tetap boleh dipakai untuk **snapshot konfigurasi dan detail tambahan**, tetapi hubungan penting seperti pasien → pemeriksaan → analisis tetap menggunakan foreign key.
+
+**5. Mengapa Beberapa Tabel Tetap Dipisahkan?**
+
+Tiga bagian ini sebaiknya tidak dipaksakan menjadi satu:
+
+- **`analysis_runs`:** hasil dari satu eksekusi AI terhadap media tertentu.
+- **`analysis_revisions`:** versi hasil yang ditinjau manusia, termasuk hasil dari beberapa video.
+- **`reports`:** dokumen berdasarkan revisi yang telah disetujui.
+
+Contohnya:
+
+```text
+Video dianalisis → hasil AI asli
+                         ↓
+Analis mengoreksi → revisi hasil baru
+                         ↓
+Dokter menyetujui → laporan dirilis
+```
+
+Dengan pemisahan tersebut, hasil asli tidak hilang ketika dikoreksi, dan laporan tidak berubah hanya karena video dianalisis ulang. Ini mengikuti kebutuhan pada `PRD.md:278` dan `CLAUDE.md:58`.
+
+`review_events` juga tetap dipisahkan dari `audit_logs`: koreksi hasil adalah data bisnis yang perlu ditinjau, sedangkan audit mencatat aktivitas sistem secara lebih luas.
+
+**6. Batas Penyederhanaannya**
+
+Walaupun tabel dikurangi, kebutuhan berikut tetap dipertahankan:
+- Lima role dan pemeriksaan akses di backend.
+- Hasil per-video tetap terpisah dari hasil gabungan.
+- Snapshot kalibrasi yang digunakan tidak ikut berubah ketika profil diedit.
+- Koreksi menghasilkan revisi; hasil asli tetap tersedia.
+- Laporan yang sudah disetujui tidak boleh diam-diam diganti.
+- Pasien hanya mengakses laporan miliknya yang sudah dirilis.
+- ID integer yang berurutan **bukan pengaman akses**; kepemilikan record tetap diperiksa oleh backend.
+
+**Rekomendasi akhir saya: satu file SQLite, ID integer, lima role, dan 12 tabel awal.** Ini lebih seimbang daripada rancangan 19 tabel: cukup sederhana untuk dikerjakan, tetapi tetap menjaga alur review, persetujuan, dan keterlacakan yang diminta dokumen.
+
+Belum ada file atau database yang saya ubah.
+
+---
+
+# DETAIL DESAIN 12 TABEL CASA-AI
+# Database Engine: SQLite
+# Version: 1.0
+# Generated: 2026-10-17
+
+==============================================================================
+## TABEL 1: users
+==============================================================================
+Menyimpan akun pengguna dengan role-based access control
+
+CREATE TABLE users (
+    id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+    email               TEXT UNIQUE NOT NULL,
+    password_hash       TEXT NOT NULL,              -- bcrypt/argon2 hash
+    full_name           TEXT NOT NULL,
+    role                TEXT NOT NULL               -- FRONT_OFFICE | ANALYST | PHYSICIAN | PATIENT | SUPER_ADMIN
+                        CHECK(role IN ('FRONT_OFFICE', 'ANALYST', 'PHYSICIAN', 'PATIENT', 'SUPER_ADMIN')),
+
+    is_active           INTEGER DEFAULT 1,          -- 1=active, 0=inactive
+    phone_number        TEXT,
+    license_number      TEXT,                       -- SIP/STR untuk physician
+
+    created_at          TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at          TEXT NOT NULL DEFAULT (datetime('now')),
+    last_login_at       TEXT
+);
+
+CREATE INDEX idx_users_email ON users(email);
+CREATE INDEX idx_users_role ON users(role);
+CREATE INDEX idx_users_active ON users(is_active);
+
+-- Notes:
+-- * Password HARUS di-hash, NEVER store plain password
+-- * Role untuk server-side authorization
+-- * license_number untuk physician signature verification
+
+==============================================================================
+## TABEL 2: auth_sessions
+==============================================================================
+Menyimpan sesi login untuk session management dan token invalidation
+
+CREATE TABLE auth_sessions (
+    id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id             INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    token_hash          TEXT UNIQUE NOT NULL,       -- hash dari session token
+    ip_address          TEXT,
+    user_agent          TEXT,
+
+    expires_at          TEXT NOT NULL,
+    is_revoked          INTEGER DEFAULT 0,          -- 1=revoked, 0=active
+    revoked_at          TEXT,
+    revoked_reason      TEXT,                       -- logout, admin_revoke, security_event
+
+    created_at          TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX idx_sessions_user ON auth_sessions(user_id);
+CREATE INDEX idx_sessions_token ON auth_sessions(token_hash);
+CREATE INDEX idx_sessions_expires ON auth_sessions(expires_at);
+
+-- Notes:
+-- * Token disimpan dalam bentuk hash untuk keamanan
+-- * Support untuk revoke session (logout, forced logout)
+-- * Audit trail untuk security monitoring
+
+==============================================================================
+## TABEL 3: patients
+==============================================================================
+Menyimpan data demografis pasien
+
+CREATE TABLE patients (
+    id                      INTEGER PRIMARY KEY AUTOINCREMENT,
+    medical_record_number   TEXT UNIQUE NOT NULL,   -- MRN dari institusi
+    full_name               TEXT NOT NULL,
+    date_of_birth           TEXT NOT NULL,          -- ISO 8601: YYYY-MM-DD
+    gender                  TEXT CHECK(gender IN ('MALE', 'FEMALE', 'OTHER')),
+
+    phone_number            TEXT,
+    email                   TEXT,
+    address                 TEXT,
+
+    -- Link ke patient portal account (optional)
+    user_id                 INTEGER REFERENCES users(id) ON DELETE SET NULL,
+
+    created_at              TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at              TEXT NOT NULL DEFAULT (datetime('now')),
+    created_by              INTEGER REFERENCES users(id) ON DELETE SET NULL
+);
+
+CREATE INDEX idx_patients_mrn ON patients(medical_record_number);
+CREATE INDEX idx_patients_user ON patients(user_id);
+CREATE INDEX idx_patients_creator ON patients(created_by);
+
+-- Notes:
+-- * Minimize PII storage sesuai institution policy
+-- * user_id link ke portal account (optional)
+-- * MRN harus unique untuk prevent duplicate patients
+
+==============================================================================
+## TABEL 4: examinations
+==============================================================================
+Menyimpan data pemeriksaan/sampel, termasuk data makroskopik
+
+CREATE TABLE examinations (
+    id                      INTEGER PRIMARY KEY AUTOINCREMENT,
+    patient_id              INTEGER NOT NULL REFERENCES patients(id) ON DELETE RESTRICT,
+    sample_code             TEXT UNIQUE NOT NULL,   -- barcode/identifier sampel
+
+    -- Sample collection info
+    collection_datetime     TEXT,                   -- ISO 8601 timestamp
+    received_datetime       TEXT,
+    abstinence_duration_hours INTEGER,              -- durasi abstinence dalam jam
+
+    -- Macroscopic data (inline, tidak perlu tabel terpisah)
+    volume_ml               REAL,
+    liquefaction_time_min   INTEGER,
+    viscosity               TEXT CHECK(viscosity IN ('NORMAL', 'INCREASED', 'DECREASED')),
+    ph_value                REAL,
+    appearance              TEXT,                   -- e.g., "gray-opalescent", "turbid"
+    macroscopic_notes       TEXT,
+
+    -- Workflow status
+    status                  TEXT NOT NULL DEFAULT 'REGISTERED'
+                            CHECK(status IN (
+                                'REGISTERED',
+                                'IN_PROGRESS',
+                                'PENDING_REVIEW',
+                                'RETURNED_FOR_CORRECTION',
+                                'APPROVED',
+                                'RELEASED',
+                                'CANCELLED',
+                                'FAILED_ANALYSIS'
+                            )),
+
+    -- Tracking
+    created_at              TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at              TEXT NOT NULL DEFAULT (datetime('now')),
+    created_by              INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    current_analyst_id      INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    current_physician_id    INTEGER REFERENCES users(id) ON DELETE SET NULL
+);
+
+CREATE INDEX idx_exams_patient ON examinations(patient_id);
+CREATE INDEX idx_exams_sample ON examinations(sample_code);
+CREATE INDEX idx_exams_status ON examinations(status);
+CREATE INDEX idx_exams_analyst ON examinations(current_analyst_id);
+CREATE INDEX idx_exams_physician ON examinations(current_physician_id);
+
+-- Notes:
+-- * Status lifecycle harus enforced di application layer
+-- * Macroscopic data inline untuk simplicity
+-- * RESTRICT on patient delete untuk protect existing examinations
+
+==============================================================================
+## TABEL 5: calibration_profiles
+==============================================================================
+Menyimpan profil kalibrasi mikroskop/chamber yang approved
+
+CREATE TABLE calibration_profiles (
+    id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+    profile_name        TEXT UNIQUE NOT NULL,
+
+    -- Device identification
+    microscope_model    TEXT,
+    camera_model        TEXT,
+    chamber_type        TEXT,                   -- e.g., "Makler", "CASA chamber"
+    magnification       TEXT,                   -- e.g., "400x", "200x"
+
+    -- Calibration parameters (CRITICAL for calculations)
+    pixel_scale_um      REAL NOT NULL,          -- µm per pixel
+    frame_rate_fps      REAL NOT NULL,          -- frames per second
+    chamber_depth_um    REAL NOT NULL,          -- chamber depth in µm
+    dilution_factor     REAL NOT NULL DEFAULT 1.0,
+
+    -- Configuration metadata
+    calibration_method  TEXT,                   -- how calibration was performed
+    calibration_date    TEXT,
+    notes               TEXT,
+
+    -- Version control
+    version             INTEGER NOT NULL DEFAULT 1,
+    is_locked           INTEGER DEFAULT 0,      -- 1=locked (approved), 0=editable
+    is_active           INTEGER DEFAULT 1,      -- 1=active, 0=archived
+
+    created_at          TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at          TEXT NOT NULL DEFAULT (datetime('now')),
+    created_by          INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    approved_by         INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    approved_at         TEXT
+);
+
+CREATE INDEX idx_calibration_active ON calibration_profiles(is_active);
+CREATE INDEX idx_calibration_locked ON calibration_profiles(is_locked);
+
+-- Notes:
+-- * Locked profiles tidak boleh diubah (approved by admin)
+-- * Setiap analysis menyimpan SNAPSHOT dari profile ini
+-- * Pixel scale, FPS, depth, dilution CRITICAL untuk physical unit calculations
+
+==============================================================================
+## TABEL 6: media_assets
+==============================================================================
+Menyimpan metadata dan lokasi file media (video, images, outputs)
+
+CREATE TABLE media_assets (
+    id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+    examination_id      INTEGER NOT NULL REFERENCES examinations(id) ON DELETE CASCADE,
+
+    -- File metadata
+    asset_type          TEXT NOT NULL           -- VIDEO_SOURCE | ANNOTATED_VIDEO | HEATMAP | TRAJECTORY | REPORT_PDF
+                        CHECK(asset_type IN (
+                            'VIDEO_SOURCE',
+                            'ANNOTATED_VIDEO',
+                            'HEATMAP',
+                            'TRAJECTORY',
+                            'REPORT_PDF'
+                        )),
+
+    file_name           TEXT NOT NULL,
+    file_size_bytes     INTEGER,
+    mime_type           TEXT,
+    storage_path        TEXT NOT NULL,          -- private storage path (NEVER public URL)
+    checksum_sha256     TEXT,                   -- untuk integrity verification
+
+    -- Video-specific metadata
+    field_of_view_index INTEGER,               -- 1, 2, 3, 4 untuk multi-FOV
+    duration_seconds    REAL,
+    width_pixels        INTEGER,
+    height_pixels       INTEGER,
+    actual_fps          REAL,
+
+    -- Access control
+    is_public           INTEGER DEFAULT 0,      -- 1=accessible, 0=private
+
+    -- Tracking
+    uploaded_at         TEXT NOT NULL DEFAULT (datetime('now')),
+    uploaded_by         INTEGER REFERENCES users(id) ON DELETE SET NULL,
+
+    -- Link to analysis if this is an output artifact
+    analysis_run_id     INTEGER REFERENCES analysis_runs(id) ON DELETE SET NULL
+);
+
+CREATE INDEX idx_media_exam ON media_assets(examination_id);
+CREATE INDEX idx_media_type ON media_assets(asset_type);
+CREATE INDEX idx_media_fov ON media_assets(field_of_view_index);
+CREATE INDEX idx_media_run ON media_assets(analysis_run_id);
+
+-- Notes:
+-- * storage_path HARUS private, tidak boleh guessable
+-- * Checksum untuk detect file corruption
+-- * Support multi-FOV (2-4 videos)
+
+==============================================================================
+## TABEL 7: analysis_runs
+==============================================================================
+Menyimpan eksekusi AI analysis per video dengan snapshot kalibrasi
+
+CREATE TABLE analysis_runs (
+    id                      INTEGER PRIMARY KEY AUTOINCREMENT,
+    examination_id          INTEGER NOT NULL REFERENCES examinations(id) ON DELETE CASCADE,
+    source_media_id         INTEGER NOT NULL REFERENCES media_assets(id) ON DELETE RESTRICT,
+
+    -- Calibration snapshot (immutable copy dari calibration_profile)
+    calibration_snapshot    TEXT NOT NULL,      -- JSON: {pixel_scale_um, frame_rate_fps, chamber_depth_um, dilution_factor, profile_name, version}
+
+    -- Processing metadata
+    status                  TEXT NOT NULL DEFAULT 'PENDING'
+                            CHECK(status IN ('PENDING', 'RUNNING', 'COMPLETED', 'FAILED')),
+
+    algorithm_version       TEXT,               -- e.g., "YOLOv8-1.2", "DeepSORT-2.0"
+    model_checkpoint        TEXT,               -- path or identifier untuk model file
+    config_params           TEXT,               -- JSON: detection threshold, tracking params, etc.
+
+    -- Processing timing
+    started_at              TEXT,
+    completed_at            TEXT,
+    processing_duration_sec REAL,
+
+    -- Per-video raw metrics (before human review)
+    total_frames_analyzed   INTEGER,
+    frames_with_detections  INTEGER,
+
+    raw_detections_count    INTEGER,            -- total detections sebelum filtering
+    valid_tracks_count      INTEGER,            -- tracks >= 15 frames (sesuai PRD)
+
+    -- Canonical count (median per-frame, sesuai PRD:236)
+    canonical_count         INTEGER,            -- median objects per frame
+
+    -- Motility classification (per-video)
+    pr_count                INTEGER,            -- Progressive
+    np_count                INTEGER,            -- Non-progressive
+    im_count                INTEGER,            -- Immotile
+
+    pr_percentage           REAL,
+    np_percentage           REAL,
+    im_percentage           REAL,
+
+    -- Movement metrics (averages)
+    avg_speed_um_s          REAL,               -- average speed in µm/s
+    avg_linearity           REAL,               -- linearity index (0-1)
+
+    -- Detailed tracking data
+    tracking_data_json      TEXT,               -- JSON: per-frame detections, track IDs, coordinates, features
+
+    -- Error handling
+    error_message           TEXT,
+    error_traceback         TEXT,
+
+    created_at              TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX idx_runs_exam ON analysis_runs(examination_id);
+CREATE INDEX idx_runs_media ON analysis_runs(source_media_id);
+CREATE INDEX idx_runs_status ON analysis_runs(status);
+
+-- Notes:
+-- * Calibration snapshot IMMUTABLE - tidak berubah walau profile diedit
+-- * Raw metrics SEBELUM human correction
+-- * tracking_data_json untuk reproducibility dan review
+-- * Error handling untuk failed analysis
+
+==============================================================================
+## TABEL 8: analysis_revisions
+==============================================================================
+Menyimpan versi hasil pemeriksaan yang sudah di-review/correct oleh analyst
+
+CREATE TABLE analysis_revisions (
+    id                      INTEGER PRIMARY KEY AUTOINCREMENT,
+    examination_id          INTEGER NOT NULL REFERENCES examinations(id) ON DELETE CASCADE,
+
+    revision_number         INTEGER NOT NULL,   -- 1, 2, 3... untuk sequential versioning
+
+    -- Aggregated metrics (dari 1-4 FOV videos, after human correction)
+    total_videos_analyzed   INTEGER NOT NULL,
+
+    -- Final motility summary
+    final_pr_count          INTEGER,
+    final_np_count          INTEGER,
+    final_im_count          INTEGER,
+
+    final_pr_percentage     REAL,
+    final_np_percentage     REAL,
+    final_im_percentage     REAL,
+
+    -- Final movement metrics
+    final_avg_speed_um_s    REAL,
+    final_avg_linearity     REAL,
+
+    -- Concentration estimate (requires valid calibration)
+    concentration_million_ml REAL,              -- estimated concentration
+    concentration_method    TEXT,               -- calculation method/formula version
+
+    -- Combined visualization artifacts (references to media_assets)
+    combined_heatmap_id     INTEGER REFERENCES media_assets(id) ON DELETE SET NULL,
+    combined_trajectory_id  INTEGER REFERENCES media_assets(id) ON DELETE SET NULL,
+
+    -- Classification rules used
+    classification_rules    TEXT,               -- JSON: {pr_threshold, im_threshold, min_track_frames, version}
+
+    -- Review status
+    is_submitted            INTEGER DEFAULT 0,  -- 1=submitted for physician review
+    submitted_at            TEXT,
+    submitted_by            INTEGER REFERENCES users(id) ON DELETE SET NULL,
+
+    -- Metadata
+    notes                   TEXT,               -- analyst notes
+
+    created_at              TEXT NOT NULL DEFAULT (datetime('now')),
+
+    UNIQUE(examination_id, revision_number)
+);
+
+CREATE INDEX idx_revisions_exam ON analysis_revisions(examination_id);
+CREATE INDEX idx_revisions_submitted ON analysis_revisions(is_submitted);
+
+-- Notes:
+-- * Revision untuk aggregate results dari multiple FOV
+-- * After human correction (removed false positives, etc.)
+-- * Support untuk reanalysis dengan revision_number increment
+
+==============================================================================
+## TABEL 9: revision_inputs
+==============================================================================
+Menyimpan hubungan many-to-many antara revision dan analysis_runs yang digunakan
+
+CREATE TABLE revision_inputs (
+    id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+    revision_id         INTEGER NOT NULL REFERENCES analysis_revisions(id) ON DELETE CASCADE,
+    analysis_run_id     INTEGER NOT NULL REFERENCES analysis_runs(id) ON DELETE RESTRICT,
+
+    -- Per-run contribution to revision
+    included_tracks     TEXT,                   -- JSON array: which track IDs were kept
+    excluded_tracks     TEXT,                   -- JSON array: which track IDs were removed
+    correction_notes    TEXT,
+
+    created_at          TEXT NOT NULL DEFAULT (datetime('now')),
+
+    UNIQUE(revision_id, analysis_run_id)
+);
+
+CREATE INDEX idx_rev_inputs_revision ON revision_inputs(revision_id);
+CREATE INDEX idx_rev_inputs_run ON revision_inputs(analysis_run_id);
+
+-- Notes:
+-- * Traceability: revision menggunakan runs mana saja
+-- * Support human correction per-run
+-- * Original AI output tetap tersimpan di analysis_runs
+
+==============================================================================
+## TABEL 10: review_events
+==============================================================================
+Menyimpan audit trail dari review actions (analyst corrections, physician return)
+
+CREATE TABLE review_events (
+    id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+    examination_id      INTEGER NOT NULL REFERENCES examinations(id) ON DELETE CASCADE,
+    revision_id         INTEGER REFERENCES analysis_revisions(id) ON DELETE SET NULL,
+
+    event_type          TEXT NOT NULL           -- ANALYST_CORRECTION | SUBMIT_FOR_REVIEW | PHYSICIAN_RETURN | PHYSICIAN_APPROVE
+                        CHECK(event_type IN (
+                            'ANALYST_CORRECTION',
+                            'SUBMIT_FOR_REVIEW',
+                            'PHYSICIAN_RETURN',
+                            'PHYSICIAN_APPROVE'
+                        )),
+
+    actor_id            INTEGER NOT NULL REFERENCES users(id) ON DELETE SET NULL,
+    actor_role          TEXT NOT NULL,          -- snapshot role saat event
+
+    -- Event details
+    target_type         TEXT,                   -- TRACK | DETECTION | REVISION | EXAMINATION
+    target_id           TEXT,                   -- ID dari target yang di-review
+
+    action              TEXT,                   -- REMOVE_TRACK | FLAG_ARTIFACT | EDIT_METRICS | RETURN | APPROVE
+    reason              TEXT,                   -- human-readable reason
+    changes_json        TEXT,                   -- JSON: before/after values
+
+    created_at          TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX idx_review_exam ON review_events(examination_id);
+CREATE INDEX idx_review_revision ON review_events(revision_id);
+CREATE INDEX idx_review_actor ON review_events(actor_id);
+CREATE INDEX idx_review_type ON review_events(event_type);
+CREATE INDEX idx_review_created ON review_events(created_at);
+
+-- Notes:
+-- * Audit trail untuk semua correction dan review actions
+-- * Support untuk physician return dengan reason
+-- * changes_json untuk before/after comparison
+
+==============================================================================
+## TABEL 11: reports
+==============================================================================
+Menyimpan versi laporan dengan physician approval dan signature
+
+CREATE TABLE reports (
+    id                      INTEGER PRIMARY KEY AUTOINCREMENT,
+    examination_id          INTEGER NOT NULL REFERENCES examinations(id) ON DELETE RESTRICT,
+    revision_id             INTEGER NOT NULL REFERENCES analysis_revisions(id) ON DELETE RESTRICT,
+
+    report_number           TEXT UNIQUE NOT NULL, -- e.g., "CASA/2026/10/001"
+    report_version          INTEGER NOT NULL DEFAULT 1,
+
+    -- Report status
+    status                  TEXT NOT NULL DEFAULT 'DRAFT'
+                            CHECK(status IN ('DRAFT', 'APPROVED', 'RELEASED', 'AMENDED')),
+
+    -- Physician approval
+    approved_by             INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    approved_at             TEXT,
+
+    -- Digital signature metadata
+    signature_method        TEXT,               -- DRAWN | DIGITAL_CERT | AUTHENTICATED_APPROVAL
+    signature_data          TEXT,               -- base64 drawn signature or cert info
+    physician_license       TEXT,               -- SIP/STR number
+
+    -- Clinical interpretation
+    clinical_interpretation TEXT,               -- physician's clinical notes
+    clinical_diagnosis      TEXT,               -- final diagnosis (if applicable)
+    recommendations         TEXT,               -- clinical recommendations
+
+    -- Report artifacts
+    report_pdf_id           INTEGER REFERENCES media_assets(id) ON DELETE SET NULL,
+    report_json             TEXT,               -- structured report data
+
+    -- Release control
+    released_at             TEXT,
+    released_by             INTEGER REFERENCES users(id) ON DELETE SET NULL,
+
+    -- Limitations and disclaimers
+    limitations_noted       TEXT,               -- e.g., "calibration not verified", "single FOV only"
+    medical_disclaimer      TEXT,               -- standard disclaimer text
+
+    created_at              TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at              TEXT NOT NULL DEFAULT (datetime('now')),
+
+    UNIQUE(examination_id, report_version)
+);
+
+CREATE INDEX idx_reports_exam ON reports(examination_id);
+CREATE INDEX idx_reports_revision ON reports(revision_id);
+CREATE INDEX idx_reports_number ON reports(report_number);
+CREATE INDEX idx_reports_status ON reports(status);
+CREATE INDEX idx_reports_physician ON reports(approved_by);
+
+-- Notes:
+-- * Report IMMUTABLE setelah released
+-- * Support untuk amendments (report_version increment)
+-- * Physician signature metadata untuk legal compliance
+-- * RESTRICT on examination/revision delete untuk protect reports
+
+==============================================================================
+## TABEL 12: audit_logs
+==============================================================================
+Menyimpan audit trail untuk semua sensitive system actions
+
+CREATE TABLE audit_logs (
+    id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+
+    -- Actor identification
+    actor_id            INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    actor_email         TEXT,                   -- snapshot email saat event
+    actor_role          TEXT,                   -- snapshot role saat event
+    actor_ip            TEXT,
+
+    -- Action details
+    action_type         TEXT NOT NULL,          -- LOGIN | LOGOUT | CREATE_PATIENT | UPLOAD_VIDEO | RUN_ANALYSIS | SUBMIT_REVIEW | APPROVE_REPORT | RELEASE_REPORT | DELETE_USER | CHANGE_ROLE | etc.
+
+    target_type         TEXT,                   -- PATIENT | EXAMINATION | MEDIA | ANALYSIS | REVISION | REPORT | USER | CALIBRATION
+    target_id           INTEGER,                -- ID dari target resource
+
+    description         TEXT NOT NULL,          -- human-readable description
+
+    -- Before/after snapshot (untuk sensitive changes)
+    before_state        TEXT,                   -- JSON snapshot before
+    after_state         TEXT,                   -- JSON snapshot after
+
+    -- Result
+    result              TEXT NOT NULL           -- SUCCESS | FAILURE | UNAUTHORIZED
+                        CHECK(result IN ('SUCCESS', 'FAILURE', 'UNAUTHORIZED')),
+    error_message       TEXT,
+
+    -- Timestamp
+    created_at          TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX idx_audit_actor ON audit_logs(actor_id);
+CREATE INDEX idx_audit_action ON audit_logs(action_type);
+CREATE INDEX idx_audit_target ON audit_logs(target_type, target_id);
+CREATE INDEX idx_audit_result ON audit_logs(result);
+CREATE INDEX idx_audit_created ON audit_logs(created_at);
+
+-- Notes:
+-- * Comprehensive audit trail untuk security dan compliance
+-- * Snapshot email/role untuk historical accuracy
+-- * Before/after state untuk sensitive changes
+-- * Protected: ordinary users CANNOT modify audit_logs
+
+==============================================================================
+## SUMMARY: 12 Tables Structure
+==============================================================================
+
+**Authentication & Authorization (2):**
+1. users                    - User accounts dengan role-based access
+2. auth_sessions            - Session management dan token invalidation
+
+**Patient & Examination (2):**
+3. patients                 - Patient demographics
+4. examinations             - Examination records + macroscopic data
+
+**Calibration & Media (2):**
+5. calibration_profiles     - Approved calibration configurations
+6. media_assets             - Video files dan output artifacts
+
+**AI Analysis (3):**
+7. analysis_runs            - Per-video AI execution results
+8. analysis_revisions       - Human-reviewed aggregate results
+9. revision_inputs          - Many-to-many: revisions ↔ runs
+
+**Review & Approval (2):**
+10. review_events           - Audit trail for corrections/reviews
+11. reports                 - Final reports dengan physician approval
+
+**Audit (1):**
+12. audit_logs              - System-wide audit trail
+
+==============================================================================
+## Database File
+==============================================================================
+- Filename: `casa_ai.db`
+- Engine: SQLite3
+- Location: `/backend/database/` (or configured path)
+- Backup: Regular automated backups recommended
+- Access: Server-side only, NEVER expose to client
+
+==============================================================================
+## Key Design Decisions
+==============================================================================
+
+1. **Integer IDs instead of UUIDs**
+   - Simpler untuk development dan debugging
+   - AUTHORIZATION masih enforced di application layer
+   - Sequential IDs BUKAN security boundary
+
+2. **Inline Macroscopic Data**
+   - Disimpan langsung di `examinations` table
+   - Tidak perlu tabel terpisah untuk simplicity
+
+3. **Calibration Snapshots as JSON**
+   - Immutable copy di `analysis_runs.calibration_snapshot`
+   - Preserve reproducibility walau profile berubah
+
+4. **Revision Versioning**
+   - Support reanalysis dengan `revision_number`
+   - Original AI output preserved di `analysis_runs`
+
+5. **Report Immutability**
+   - Released reports READ-ONLY
+   - Amendments create new version
+
+6. **Comprehensive Audit Trail**
+   - `review_events`: business-level corrections
+   - `audit_logs`: system-wide security events
+
+==============================================================================
+## Security Notes
+==============================================================================
+
+✓ Passwords hashed dengan bcrypt/argon2
+✓ Session tokens hashed before storage
+✓ Media files NEVER served via public URLs
+✓ Authorization enforced server-side
+✓ Patient data minimization
+✓ Comprehensive audit logging
+✓ Foreign key constraints untuk data integrity
+✓ CHECK constraints untuk valid values
+✓ Soft delete consideration via is_active flags
+
+==============================================================================
+## Next Steps
+==============================================================================
+
+1. Review desain dengan domain expert (physician, lab analyst)
+2. Validate motility thresholds dan calculation formulas
+3. Implement database migrations
+4. Create seed data untuk development
+5. Write integration tests untuk critical workflows
+6. Setup automated database backups
+7. Implement soft delete policy jika diperlukan
+8. Setup database monitoring dan performance optimization
+
+==============================================================================
+END OF DATABASE DESIGN DOCUMENT
+==============================================================================

@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
+import { API_BASE_URL } from '../api.js';
 import {
   LayoutGrid,
   PanelLeftOpen,
@@ -469,7 +470,7 @@ export default function AdminDashboard({ onSwitchToPublic }) {
     setAnalysisError(null);
     setProgressStatus({ stage: 'uploading', percent: 15, msg: 'Mengunggah file ke backend CASA-AI...' });
 
-    const endpoint = isImageUpload ? 'http://localhost:8000/api/analyze_image' : 'http://localhost:8000/api/analyze';
+    const endpoint = `${API_BASE_URL}/api/${isImageUpload ? 'analyze_image' : 'analyze'}`;
 
     if (isImageUpload) {
       formData.append('image', uploadFile);
@@ -485,7 +486,7 @@ export default function AdminDashboard({ onSwitchToPublic }) {
         });
         setAnalysisResult({
           data: res.data.data,
-          video_url: `http://localhost:8000${res.data.video_url}`,
+          video_url: `${API_BASE_URL}${res.data.video_url}`,
           heatmap_url: null,
           isImage: true
         });
@@ -501,7 +502,7 @@ export default function AdminDashboard({ onSwitchToPublic }) {
         let polling = true;
         while (polling) {
           await new Promise((r) => setTimeout(r, 1800));
-          const progRes = await axios.get(`http://localhost:8000/api/progress/${task_id}`);
+          const progRes = await axios.get(`${API_BASE_URL}/api/progress/${task_id}`);
 
           if (progRes.data.status === 'completed') {
             polling = false;
@@ -509,8 +510,8 @@ export default function AdminDashboard({ onSwitchToPublic }) {
             if (finalRes.success) {
               setAnalysisResult({
                 data: finalRes.data,
-                video_url: `http://localhost:8000${finalRes.video_url}`,
-                heatmap_url: `http://localhost:8000${finalRes.heatmap_url}`,
+                video_url: `${API_BASE_URL}${finalRes.video_url}`,
+                heatmap_url: `${API_BASE_URL}${finalRes.heatmap_url}`,
                 isImage: false
               });
               setProgressStatus({ stage: 'completed', percent: 100, msg: 'Analisis pelacakan video selesai!' });

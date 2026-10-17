@@ -1,6 +1,7 @@
 import { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
+import { API_BASE_URL } from '../api.js';
 import { 
   UploadCloud, 
   Play, 
@@ -169,7 +170,7 @@ export default function PublicPortal({ onSwitchToDashboard }) {
     formData.append("video", videoFile);
 
     try {
-      const submitRes = await axios.post("http://localhost:8000/api/analyze", formData, {
+      const submitRes = await axios.post(`${API_BASE_URL}/api/analyze`, formData, {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
       
@@ -187,7 +188,7 @@ export default function PublicPortal({ onSwitchToDashboard }) {
         return new Promise((resolve, reject) => {
           const interval = setInterval(async () => {
             try {
-              const progressRes = await axios.get(`http://localhost:8000/api/progress/${task_id}`);
+              const progressRes = await axios.get(`${API_BASE_URL}/api/progress/${task_id}`);
               const data = progressRes.data;
               
               if (data.status === 'completed') {
@@ -215,7 +216,7 @@ export default function PublicPortal({ onSwitchToDashboard }) {
       if (result.success) {
         setResults({
           data: result.data,
-          video_url: `http://localhost:8000${result.video_url}`,
+          video_url: `${API_BASE_URL}${result.video_url}`,
           heatmap_url: result.heatmap_url,
           original_url: objUrl
         });
@@ -250,14 +251,14 @@ export default function PublicPortal({ onSwitchToDashboard }) {
     formData.append('image', videoFile);
 
     try {
-      const res = await axios.post('http://localhost:8000/api/analyze_image', formData, {
+      const res = await axios.post(`${API_BASE_URL}/api/analyze_image`, formData, {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
       const result = res.data;
       if (result.success) {
         setResults({
           data: result.data,
-          video_url: `http://localhost:8000${result.video_url}`,
+          video_url: `${API_BASE_URL}${result.video_url}`,
           heatmap_url: null,
           original_url: objUrl,
           is_image: true
@@ -1337,7 +1338,7 @@ export default function PublicPortal({ onSwitchToDashboard }) {
                 <li><a href="/login" onClick={(e) => { e.preventDefault(); handleGoToDashboard(); }}>Portal Dokter Spesialis (Sp.And)</a></li>
                 <li><a href="/login" onClick={(e) => { e.preventDefault(); handleGoToDashboard(); }}>Portal Analis Lab Mikroskop</a></li>
                 <li><a href="/login" onClick={(e) => { e.preventDefault(); handleGoToDashboard(); }}>Konsol Superadmin Medis</a></li>
-                <li><a href="http://localhost:8000/docs" target="_blank" rel="noreferrer">FastAPI Docs (Swagger)</a></li>
+                <li><a href={`${API_BASE_URL}/docs`} target="_blank" rel="noreferrer">FastAPI Docs (Swagger)</a></li>
               </ul>
             </div>
 
