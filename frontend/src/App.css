@@ -1,0 +1,34 @@
+/* CASA AI Specific Micro-interactions and Canvas Trajectory Helpers */
+.trajectory-canvas {
+  width: 100%;
+  height: 260px;
+  background: #0B0F17;
+  border-radius: var(--radius-lg);
+  display: block;
+}
+
+.glow-teal {
+  box-shadow: 0 0 20px rgba(0, 175, 160, 0.4);
+}
+
+.glow-lime {
+  box-shadow: 0 0 20px rgba(193, 215, 46, 0.4);
+}
+
+.custom-scrollbar::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 9999px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: var(--text-muted);
+}

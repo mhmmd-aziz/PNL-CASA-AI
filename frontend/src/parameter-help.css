@@ -1,0 +1,13 @@
+.parameter-help { margin: 5px 0 9px; min-width: 0; }
+.parameter-help-button { display: inline-flex; align-items: center; gap: 5px; border: 1px solid var(--border, #cbd5e1); border-radius: 6px; padding: 5px 8px; background: var(--bg-card, #fff); color: var(--teal-dark, #087f75); font: inherit; font-size: 0.72rem; cursor: pointer; text-align: left; }
+.parameter-help-button > span { display: inline-grid; place-items: center; border: 1px solid currentColor; border-radius: 50%; width: 15px; height: 15px; font-weight: 800; }
+.parameter-help-button:focus-visible { outline: 2px solid #00afa0; outline-offset: 3px; }
+.parameter-help-panel { margin-top: 7px; padding: 10px 12px; background: var(--bg-card-alt, #f0fdfa); color: var(--text-secondary, #334155); border-left: 3px solid #00afa0; border-radius: 4px; font-size: 0.76rem; line-height: 1.65; overflow-wrap: anywhere; }
+.parameter-help-panel p { margin: 7px 0 0; }
+.calibration-fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 180px), 1fr)); gap: 14px; margin: 12px 0; }
+.calibration-field { min-width: 0; }
+.calibration-field > label { display: block; font-size: 0.8rem; font-weight: 600; }
+.calibration-field .search-box { width: 100%; margin-top: 4px; box-sizing: border-box; }
+.calibration-field-note { font-size: 0.74rem; line-height: 1.6; color: var(--text-muted, #64748b); margin: 5px 0; }
+.analysis-workspace { display: grid; grid-template-columns: minmax(300px, 420px) minmax(0, 1fr); gap: 20px; align-items: start; }
+@media (max-width: 1100px) { .analysis-workspace { grid-template-columns: minmax(0, 1fr); } }

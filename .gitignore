@@ -1,0 +1,38 @@
+node_modules/
+__pycache__/
+*.pyc
+.env
+venv/
+.venv/
+
+# Datasets
+daatsets sperm/
+dataset/
+train model/dataset/
+
+# Large binaries/videos/models/documents
+*.zip
+*.rar
+*.avi
+*.mp4
+*.webm
+*.pt
+*.onnx
+*.cache
+*.pdf
+.tmp/
+.cache/
+
+# Images
+*.jpg
+*.jpeg
+*.JPG
+*.JPEG
+
+
+# Output/upload dirs
+backend/outputs/
+backend/uploads/
+backend/data/calibration.json
+runs/
+train model/runs/
