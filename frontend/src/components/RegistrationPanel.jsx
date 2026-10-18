@@ -4,7 +4,7 @@ import { UserPlus, CheckCircle2, AlertCircle } from 'lucide-react';
 import { API_BASE_URL } from '../api.js';
 import { getAuthHeader } from '../auth';
 
-const EMPTY_FORM = { fullName: '', birthDate: '', gender: '', phone: '', email: '' };
+const EMPTY_FORM = { fullName: '', birthDate: '', phone: '', email: '' };
 
 function errorMessage(error) {
   const detail = error.response?.data?.detail;
@@ -37,7 +37,6 @@ export default function RegistrationPanel() {
         {
           full_name: form.fullName.trim(),
           birth_date: form.birthDate,
-          gender: form.gender || null,
           phone: form.phone.trim() || null,
           email: form.email.trim()
         },
@@ -74,15 +73,6 @@ export default function RegistrationPanel() {
           <input type="date" className="search-box" value={form.birthDate} onChange={update('birthDate')} required />
         </label>
         <label style={label}>
-          Jenis kelamin
-          <select className="search-box" value={form.gender} onChange={update('gender')}>
-            <option value="">— pilih —</option>
-            <option value="MALE">Laki-laki</option>
-            <option value="FEMALE">Perempuan</option>
-            <option value="OTHER">Lainnya</option>
-          </select>
-        </label>
-        <label style={label}>
           No. HP
           <input className="search-box" value={form.phone} onChange={update('phone')} />
         </label>
@@ -113,7 +103,7 @@ export default function RegistrationPanel() {
             </span>
           </div>
           {registered.portal_account && (
-            <div style={{ padding: '12px', borderRadius: 'var(--radius-sm)', background: '#FEF3C7', border: '1px solid #F59E0B', fontSize: '0.8rem' }}>
+            <div style={{ padding: '12px', borderRadius: 'var(--radius-sm)', background: 'rgba(245, 158, 11, 0.14)', border: '1px solid #F59E0B', fontSize: '0.8rem' }}>
               <strong>Akun portal dibuat.</strong> Serahkan data ini ke pasien. Kata sandi hanya ditampilkan sekali.
               <div style={{ marginTop: '6px' }}>Email: <strong>{registered.portal_account.email}</strong></div>
               <div>Kata sandi sementara: <strong style={{ fontFamily: 'monospace' }}>{registered.portal_account.temporary_password}</strong></div>

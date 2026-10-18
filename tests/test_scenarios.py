@@ -346,6 +346,36 @@ class PositiveScenarios(ScenarioBase):
         listed = self.client.get("/api/examinations", headers=self.auth("fo@lab.test")).json()
         self.assertEqual(listed[0]["abstinence_ready_at"], created["abstinence_ready_at"])
 
+    def test_p7_front_office_deletes_wrongly_registered_patient(self):
+        keep = self.registered(name="Pasien Tetap", email="tetap@mail.test", slot=next_slot(hour=9))
+        wrong = self.registered(name="Pasien Salah Input", email="salah@mail.test", slot=next_slot(hour=9))
+        patient_id = self.db().execute("SELECT patient_id FROM examinations WHERE id = ?", (wrong["id"],)).fetchone()[0]
+        patient_headers = self.auth("salah@mail.test")
+
+        listed = {p["id"]: p for p in self.client.get("/api/patients", headers=self.auth("fo@lab.test")).json()}
+        self.assertTrue(listed[patient_id]["can_delete"])
+        response = self.client.delete(f"/api/patients/{patient_id}", headers=self.auth("fo@lab.test"))
+        self.assertEqual(response.status_code, 200, response.text)
+
+        conn = self.db()
+        self.assertIsNone(conn.execute("SELECT 1 FROM patients WHERE id = ?", (patient_id,)).fetchone())
+        self.assertIsNone(conn.execute("SELECT 1 FROM examinations WHERE id = ?", (wrong["id"],)).fetchone())
+        self.assertIsNone(conn.execute("SELECT 1 FROM users WHERE email = 'salah@mail.test'").fetchone())
+        # Sesi pasien yang dihapus tidak berlaku lagi, dan antrean pasien lain dirapikan
+        self.assertEqual(self.client.get("/api/auth/me", headers=patient_headers).status_code, 401)
+        self.assertEqual(conn.execute("SELECT queue_number FROM examinations WHERE id = ?", (keep["id"],)).fetchone()[0], "A-001")
+        self.assertIn("DELETE_PATIENT", self.audit_actions())
+
+    def test_p8_gender_is_set_automatically(self):
+        exam = self.registered(gender="FEMALE")
+        response = self.client.post("/api/patients", json={
+            "full_name": "Pasien Tanpa Gender", "birth_date": "1992-02-02", "email": "tanpagender@mail.test",
+        }, headers=self.auth("fo@lab.test"))
+        self.assertEqual(response.status_code, 201, response.text)
+        genders = {row[0] for row in self.db().execute("SELECT gender FROM patients")}
+        self.assertEqual(genders, {"MALE"})
+        self.assertTrue(exam["id"])
+
     def test_p5_existing_patient_registered_again_by_medical_record_number(self):
         first = self.registered()
         second = self.register(medical_record_number=first["medical_record_number"], full_name=None, email=None,
@@ -470,6 +500,21 @@ class NegativeScenarios(ScenarioBase):
         response, _ = self.analyze(exam_id)
         self.assertEqual(response.status_code, 500)
         self.assertEqual(self.db().execute("SELECT COUNT(*) FROM analysis_runs").fetchone()[0], 0)
+
+    def test_n11_patient_with_lab_data_cannot_be_deleted(self):
+        exam_id = self.registered()["id"]
+        self.receive(exam_id)
+        patient_id = self.db().execute("SELECT patient_id FROM examinations WHERE id = ?", (exam_id,)).fetchone()[0]
+
+        listed = {p["id"]: p for p in self.client.get("/api/patients", headers=self.auth("fo@lab.test")).json()}
+        self.assertFalse(listed[patient_id]["can_delete"])
+        response = self.client.delete(f"/api/patients/{patient_id}", headers=self.auth("fo@lab.test"))
+        self.assertEqual(response.status_code, 409)
+        self.assertEqual(self.client.delete(f"/api/patients/{patient_id}", headers=self.auth("analis@lab.test")).status_code, 403)
+        self.assertEqual(self.client.delete(f"/api/patients/{patient_id}", headers=self.auth("admin@lab.test")).status_code, 403)
+        self.assertEqual(self.client.delete("/api/patients/99999", headers=self.auth("fo@lab.test")).status_code, 404)
+        self.assertIsNotNone(self.db().execute("SELECT 1 FROM patients WHERE id = ?", (patient_id,)).fetchone())
+        self.assertEqual(self.status(exam_id), "IN_PROGRESS")
 
     def test_n10_invalid_analysis_parameters(self):
         exam_id = self.registered()["id"]

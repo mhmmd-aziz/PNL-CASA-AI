@@ -17,7 +17,7 @@ Alur yang diuji dari ujung ke ujung lewat API asli (FastAPI `TestClient`):
 
 | Pemeriksaan | Perintah | Hasil |
 | --- | --- | --- |
-| Seluruh tes Python (termasuk 31 tes skenario) | `python -m unittest discover -s tests -p "test_*.py"` | **120 tes OK** (2 di antaranya *expected failure*, lihat Temuan) |
+| Seluruh tes Python (termasuk 36 tes skenario) | `python -m unittest discover -s tests -p "test_*.py"` | **124 tes OK** (2 di antaranya *expected failure*, lihat Temuan) |
 | Tes unit frontend | `cd frontend && node --test src/*.test.js` | **31 lulus**, 0 gagal |
 | Lint frontend | `cd frontend && npm run lint` | Lulus (exit 0) |
 
@@ -30,6 +30,9 @@ Alur yang diuji dari ujung ke ujung lewat API asli (FastAPI `TestClient`):
 | P3 | Dikembalikan dokter | Dokter mengembalikan sampel beserta alasan, analis menganalisis ulang dan mengirim lagi, lalu disetujui. Kedua hasil analisis tetap tersimpan | ✅ |
 | P4 | Kalibrasi | Super Admin menyimpan profil, dan analisis berikutnya memakai nilai tersebut (tercatat di snapshot) | ✅ |
 | P5 | Pasien lama | Registrasi ulang lewat nomor rekam medis tanpa membuat akun portal baru | ✅ |
+| P6 | Kartu jadwal | API registrasi dan daftar pemeriksaan mengirim waktu mulai pantang dan waktu siap diperiksa | ✅ |
+| P7 | Hapus pasien | Front Office menghapus pasien yang salah didaftarkan; jadwal, akun portal, dan sesinya ikut terhapus, antrean pasien lain dirapikan, dan tercatat di log audit | ✅ |
+| P8 | Jenis kelamin | Jenis kelamin diisi otomatis sebagai laki-laki; nilai lain yang dikirim klien diabaikan | ✅ |
 
 ## b. Skenario Negatif — kesalahan input atau gangguan sistem
 
@@ -45,6 +48,7 @@ Alur yang diuji dari ujung ke ujung lewat API asli (FastAPI `TestClient`):
 | N8 | Pipeline analisis gagal (video tidak dapat didekode) | Tugas berstatus gagal dengan pesan jelas, **tidak ada hasil palsu** tersimpan, dan sampel tidak bisa dikirim ke dokter | ✅ |
 | N9 | Bobot model tidak ada / file kalibrasi rusak | 503 / 500 dengan pesan eksplisit, tidak ada hasil tersimpan | ✅ |
 | N10 | Parameter analisis tidak valid (`conf_thres` 0 atau 1,5, skala negatif, FPS NaN, tipe bilik tidak dikenal) | 422 | ✅ |
+| N11 | Hapus pasien yang sampelnya sudah diterima lab, dihapus oleh analis atau Super Admin, atau ID tidak ada | 409 / 403 / 404, data pasien dan pemeriksaan tetap utuh | ✅ |
 
 ## c. Skenario Edge Case — kondisi jarang atau tidak terduga
 

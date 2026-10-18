@@ -37,12 +37,15 @@ class MacroscopicUpdate(BaseModel):
     macroscopic_notes: Optional[str] = Field(default=None, max_length=1000)
 
 
+# Pemeriksaan analisis semen hanya untuk pasien laki-laki; jenis kelamin tidak diisi manual
+PATIENT_GENDER = "MALE"
+
+
 class ExaminationCreate(BaseModel):
     # Pasien: isi ID rekam medis jika sudah terdaftar; jika kosong, pasien baru dibuat
     medical_record_number: Optional[str] = Field(default=None, max_length=40)
     full_name: Optional[str] = Field(default=None, min_length=3, max_length=120)
     birth_date: Optional[date] = None
-    gender: Optional[Literal["MALE", "FEMALE", "OTHER"]] = None
     phone: Optional[str] = Field(default=None, max_length=25)
     # Email untuk akun portal pasien; wajib jika pasien belum punya akun
     email: Optional[str] = Field(default=None, max_length=254, pattern=r'^[^@\s]+@[^@\s]+\.[^@\s]+$')
@@ -260,7 +263,7 @@ def _resolve_patient(conn, payload: ExaminationCreate, actor_id: int) -> int:
             _new_medical_record_number(conn),
             payload.full_name.strip(),
             payload.birth_date.isoformat(),
-            payload.gender,
+            PATIENT_GENDER,
             payload.phone.strip() if payload.phone else None,
             actor_id,
         ),
@@ -828,13 +831,12 @@ def create_portal_account(payload: PortalAccountCreate, user: dict = FRONT_OFFIC
 
 
 # ---------------------------------------------------------------------------
-# Front Office: ubah dan batalkan (CRUD tanpa hapus permanen)
+# Front Office: ubah, batalkan, dan hapus pasien yang belum punya data laboratorium
 # ---------------------------------------------------------------------------
 
 class PatientUpdate(BaseModel):
     full_name: Optional[str] = Field(default=None, min_length=3, max_length=120)
     birth_date: Optional[date] = None
-    gender: Optional[Literal["MALE", "FEMALE", "OTHER"]] = None
     phone: Optional[str] = Field(default=None, max_length=25)
     email: Optional[str] = Field(default=None, max_length=254, pattern=r'^[^@\s]+@[^@\s]+\.[^@\s]+$')
 
@@ -848,7 +850,6 @@ class ScheduleUpdate(BaseModel):
 class PatientCreate(BaseModel):
     full_name: str = Field(min_length=3, max_length=120)
     birth_date: date
-    gender: Optional[Literal["MALE", "FEMALE", "OTHER"]] = None
     phone: Optional[str] = Field(default=None, max_length=25)
     email: str = Field(min_length=5, max_length=254, pattern=r'^[^@\s]+@[^@\s]+\.[^@\s]+$')
 
@@ -880,7 +881,7 @@ def register_patient(payload: PatientCreate, user: dict = FRONT_OFFICE):
             INSERT INTO patients (medical_record_number, full_name, date_of_birth, gender, phone_number, created_by)
             VALUES (?, ?, ?, ?, ?, ?)
             """,
-            (mrn, payload.full_name.strip(), payload.birth_date.isoformat(), payload.gender,
+            (mrn, payload.full_name.strip(), payload.birth_date.isoformat(), PATIENT_GENDER,
              payload.phone.strip() if payload.phone else None, user["id"]),
         )
         patient_id = cursor.lastrowid
@@ -918,7 +919,11 @@ def list_patients(user: dict = FRONT_OFFICE):
         """
         SELECT p.id, p.medical_record_number, p.full_name, p.date_of_birth, p.gender,
                p.phone_number, p.email, p.user_id,
-               (SELECT COUNT(*) FROM examinations e WHERE e.patient_id = p.id AND e.status <> 'CANCELLED') AS exam_count
+               (SELECT COUNT(*) FROM examinations e WHERE e.patient_id = p.id AND e.status <> 'CANCELLED') AS exam_count,
+               NOT EXISTS (
+                   SELECT 1 FROM examinations e
+                   WHERE e.patient_id = p.id AND e.status NOT IN ('REGISTERED', 'CANCELLED')
+               ) AS can_delete
         FROM patients p
         ORDER BY p.created_at DESC, p.id DESC
         LIMIT 500
@@ -935,9 +940,58 @@ def list_patients(user: dict = FRONT_OFFICE):
             "email": row["email"],
             "has_portal_account": row["user_id"] is not None,
             "exam_count": row["exam_count"],
+            "can_delete": bool(row["can_delete"]),
         }
         for row in rows
     ]
+
+
+@patients_router.delete("/{patient_id}")
+def delete_patient(patient_id: int, user: dict = FRONT_OFFICE):
+    """Hapus pasien yang salah didaftarkan. Hanya boleh jika belum ada sampel yang diterima laboratorium.
+
+    Jadwal yang belum diterima ikut dihapus, begitu pula akun portal pasien beserta sesinya.
+    Pasien yang sudah punya data laboratorium tidak bisa dihapus agar hasil dan laporan tetap utuh.
+    """
+    conn = get_connection()
+    patient = conn.execute(
+        "SELECT id, medical_record_number, user_id FROM patients WHERE id = ?", (patient_id,)
+    ).fetchone()
+    if patient is None:
+        raise HTTPException(status_code=404, detail="Pasien tidak ditemukan.")
+    exams = conn.execute(
+        "SELECT id, status, queue_date FROM examinations WHERE patient_id = ?", (patient_id,)
+    ).fetchall()
+    if any(exam["status"] not in ("REGISTERED", "CANCELLED") for exam in exams):
+        raise HTTPException(
+            status_code=409,
+            detail="Pasien ini sudah memiliki sampel yang diterima laboratorium. Data tidak bisa dihapus; gunakan Ubah untuk memperbaiki data diri.",
+        )
+
+    try:
+        conn.execute("DELETE FROM examinations WHERE patient_id = ?", (patient_id,))
+        conn.execute("DELETE FROM patients WHERE id = ?", (patient_id,))
+        if patient["user_id"] is not None:
+            conn.execute("DELETE FROM users WHERE id = ? AND role = 'PATIENT'", (patient["user_id"],))
+        for day in {exam["queue_date"] for exam in exams if exam["status"] == "REGISTERED" and exam["queue_date"]}:
+            _renumber_day(conn, day)
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise HTTPException(status_code=500, detail="Penghapusan pasien gagal. Coba lagi.")
+
+    log_audit_event(
+        actor_id=user["id"],
+        action_type="DELETE_PATIENT",
+        description=f"Pasien {patient['medical_record_number']} dihapus beserta {len(exams)} jadwal yang belum diterima lab",
+        target_type="patient",
+        target_id=patient_id,
+        actor_email=user["email"],
+        actor_role=user["role"],
+        before_state={"medical_record_number": patient["medical_record_number"], "examinations": len(exams),
+                      "had_portal_account": patient["user_id"] is not None},
+    )
+    return {"id": patient_id, "deleted": True}
 
 
 @patients_router.put("/{patient_id}")
@@ -959,7 +1013,7 @@ def update_patient(patient_id: int, payload: PatientUpdate, user: dict = FRONT_O
 
     full_name = changes["full_name"].strip() if changes.get("full_name") else patient["full_name"]
     birth = changes["birth_date"].isoformat() if changes.get("birth_date") else patient["date_of_birth"]
-    gender = changes["gender"] if "gender" in changes else patient["gender"]
+    gender = patient["gender"] or PATIENT_GENDER
     phone = (changes["phone"] or "").strip() if "phone" in changes else (patient["phone_number"] or "")
     phone = phone or None
     try:

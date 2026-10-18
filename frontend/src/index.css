@@ -64,6 +64,8 @@
 
 /* Dark mode theme variables */
 [data-theme='dark'] {
+  /* Ikon kalender/jam dan popup bawaan input tanggal ikut versi gelap */
+  color-scheme: dark;
   --bg-app: #000000;
   --bg-shell: #0A0A0A;
   --bg-panel: #0A0A0A;

@@ -14,7 +14,7 @@ Dokumen ini mencatat apa yang sudah dibangun, bagaimana sistem bekerja, dan apa 
 | Aplikasi web lima peran (Front Office, Analis, Dokter, Pasien, Super Admin) | Berjalan |
 | Alur registrasi sampai laporan dirilis | Berjalan, diuji otomatis |
 | Koreksi deteksi oleh analis | Berjalan |
-| Pengujian positif, negatif, edge case | 33 tes skenario, lihat [TESTING.md](TESTING.md) |
+| Pengujian positif, negatif, edge case | 36 tes skenario, lihat [TESTING.md](TESTING.md) |
 
 ## 2. Arsitektur sistem
 
@@ -157,7 +157,7 @@ flowchart LR
 
 ### Fitur tambahan di luar proposal
 
-- Registrasi pasien dengan nomor rekam medis otomatis dan akun portal pasien.
+- Registrasi pasien dengan nomor rekam medis otomatis dan akun portal pasien. Jenis kelamin diisi otomatis, dan pasien yang salah didaftarkan dapat dihapus selama sampelnya belum diterima laboratorium.
 - Jadwal per slot 15 menit (maksimal 4 pasien per slot), pemeriksaan masa pantang 2–7 hari, dan peringatan jadwal ganda di hari yang sama.
 - Label sampel dengan barcode dan QR, kartu jadwal pasien berisi masa pantang dan petunjuk, serta pemindai QR untuk Front Office.
 - Editor koreksi deteksi per frame dengan pratinjau dan riwayat revisi.
@@ -204,7 +204,7 @@ Pengujian otomatis mencakup tiga skenario sesuai ketentuan. Ringkasannya di bawa
 | Negatif | Login salah, akses lintas peran, input tidak valid, urutan alur dilompati, pipeline gagal, dan bobot model hilang |
 | Edge case | Nilai batas makroskopis dan masa pantang, slot penuh, dua analis pada satu sampel, laporan yang sudah dirilis, dan isolasi data antarpasien |
 
-Hasil terakhir: 120 tes Python OK dan 31 tes frontend lulus. Dua kekurangan yang ditemukan dan belum diperbaiki:
+Hasil terakhir: 124 tes Python OK dan 31 tes frontend lulus. Dua kekurangan yang ditemukan dan belum diperbaiki:
 
 1. Upload belum memvalidasi tipe dan ukuran berkas.
 2. Jika pendaftaran sesi koreksi gagal setelah hasil analisis tersimpan, hasil tersebut masih bisa dikirim ke dokter.

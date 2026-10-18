@@ -1,16 +1,9 @@
 import { Fragment, useEffect, useMemo, useState } from 'react';
 import axios from 'axios';
-import { Users, Search, Pencil, CalendarDays, CheckCircle2, AlertCircle, X } from 'lucide-react';
+import { Users, Search, Pencil, CalendarDays, CheckCircle2, AlertCircle, X, Trash2 } from 'lucide-react';
 import ScheduleExamForm from './ScheduleExamForm';
 import { API_BASE_URL } from '../api.js';
 import { getAuthHeader } from '../auth';
-
-const GENDER_OPTIONS = [
-  { value: '', label: '— pilih —' },
-  { value: 'MALE', label: 'Laki-laki' },
-  { value: 'FEMALE', label: 'Perempuan' },
-  { value: 'OTHER', label: 'Lainnya' }
-];
 
 function errorMessage(error) {
   const detail = error.response?.data?.detail;
@@ -28,7 +21,6 @@ function PatientEditor({ patient, onSaved, onClose }) {
   const [form, setForm] = useState({
     full_name: patient.full_name || '',
     birth_date: patient.date_of_birth || '',
-    gender: patient.gender || '',
     phone: patient.phone_number || '',
     email: patient.email || ''
   });
@@ -47,7 +39,6 @@ function PatientEditor({ patient, onSaved, onClose }) {
         {
           full_name: form.full_name.trim(),
           birth_date: form.birth_date || null,
-          gender: form.gender || null,
           phone: form.phone.trim() || null,
           email: form.email.trim() || null
         },
@@ -65,11 +56,6 @@ function PatientEditor({ patient, onSaved, onClose }) {
     <form onSubmit={save} style={{ gridColumn: '1 / -1', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '12px', padding: '14px', borderRadius: 'var(--radius-md)', background: 'var(--bg-card-alt)' }}>
       <label style={label}>Nama lengkap<input className="search-box" required minLength={3} value={form.full_name} onChange={update('full_name')} /></label>
       <label style={label}>Tanggal lahir<input type="date" className="search-box" value={form.birth_date} onChange={update('birth_date')} /></label>
-      <label style={label}>Jenis kelamin
-        <select className="search-box" value={form.gender} onChange={update('gender')}>
-          {GENDER_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-        </select>
-      </label>
       <label style={label}>No. HP<input className="search-box" value={form.phone} onChange={update('phone')} /></label>
       <label style={label}>
         Email{patient.has_portal_account ? ' (juga dipakai masuk portal)' : ''}
@@ -98,6 +84,7 @@ export default function PatientListPanel() {
   const [editingId, setEditingId] = useState(null);
   const [schedulingId, setSchedulingId] = useState(null);
   const [notice, setNotice] = useState(null);
+  const [deletingId, setDeletingId] = useState(null);
 
   const load = async () => {
     try {
@@ -130,6 +117,27 @@ export default function PatientListPanel() {
     setEditingId(null);
     setNotice({ type: 'ok', text });
     load();
+  };
+
+  // Hapus pasien yang salah didaftarkan; server menolak jika sampelnya sudah diterima lab
+  const remove = async (p) => {
+    const extra = p.exam_count ? `\n\n${p.exam_count} jadwal pemeriksaan yang belum diterima lab ikut terhapus.` : '';
+    if (!window.confirm(`Hapus pasien ${p.full_name} (${p.medical_record_number})?${extra}
+
+Akun portal pasien ikut dihapus. Tindakan ini tidak bisa dibatalkan dan tercatat di log audit.`)) return;
+    setDeletingId(p.id);
+    setNotice(null);
+    try {
+      await axios.delete(`${API_BASE_URL}/api/patients/${p.id}`, { headers: getAuthHeader() });
+      setNotice({ type: 'ok', text: `Pasien ${p.full_name} (${p.medical_record_number}) dihapus.` });
+      setEditingId(null);
+      setSchedulingId(null);
+      load();
+    } catch (error) {
+      setNotice({ type: 'error', text: errorMessage(error) });
+    } finally {
+      setDeletingId(null);
+    }
   };
 
   return (
@@ -193,6 +201,11 @@ export default function PatientListPanel() {
                       <button type="button" className="action-pill-btn secondary" onClick={() => { setEditingId(p.id); setSchedulingId(null); }}>
                         <Pencil size={13} /> Ubah
                       </button>
+                      {p.can_delete && (
+                        <button type="button" className="action-pill-btn secondary" disabled={deletingId === p.id} onClick={() => remove(p)}>
+                          <Trash2 size={13} /> {deletingId === p.id ? 'Menghapus...' : 'Hapus'}
+                        </button>
+                      )}
                     </span>
                   </td>
                 </tr>
