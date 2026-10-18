@@ -10,6 +10,8 @@
     linear-gradient(160deg, #ecfdf9 0%, #f8fafc 45%, #f7fbe6 100%);
   font-family: 'Plus Jakarta Sans', -apple-system, sans-serif;
   color: #0f172a;
+  /* Halaman login selalu terang walau tema gelap dashboard masih aktif di <html> */
+  color-scheme: light;
   position: relative;
   overflow: hidden;
 }
@@ -274,6 +276,17 @@
   border-color: #00AFA0;
   background: #ffffff;
   box-shadow: 0 0 0 3px rgba(0, 175, 160, 0.15);
+}
+
+/* Autofill Chrome: pertahankan warna kolom, bukan warna bawaan browser */
+.login-input:-webkit-autofill {
+  -webkit-box-shadow: 0 0 0 1000px #f8fafc inset;
+  -webkit-text-fill-color: #0f172a;
+  caret-color: #0f172a;
+}
+
+.login-input:-webkit-autofill:focus {
+  -webkit-box-shadow: 0 0 0 1000px #ffffff inset, 0 0 0 3px rgba(0, 175, 160, 0.15);
 }
 
 .password-toggle-btn {

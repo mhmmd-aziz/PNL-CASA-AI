@@ -33,6 +33,10 @@ import {
 import { getRoleMode } from '../auth';
 import '../public-portal.css';
 import BrandLogos from './BrandLogos';
+import CasaModel3D from './CasaModel3D';
+import FloatingNav from './FloatingNav';
+import { NAV_LINKS } from '../landingNav.js';
+import MobileNavMenu from './MobileNavMenu';
 
 // Alur kerja sesuai status pemeriksaan di backend (REGISTERED -> ... -> RELEASED)
 const WORKFLOW_STEPS = [
@@ -226,6 +230,7 @@ export default function PublicPortal({ onSwitchToDashboard }) {
 
   return (
     <div className="public-portal-scope">
+      <FloatingNav loggedIn={Boolean(getRoleMode())} onLogin={handleGoToDashboard} />
 
       {/* ─── HERO ─── */}
       <div className="hero-outer-wrapper">
@@ -241,11 +246,7 @@ export default function PublicPortal({ onSwitchToDashboard }) {
             </div>
 
             <nav className="hero-nav-menu">
-              <a href="#alur">Alur Kerja</a>
-              <a href="#peran">Peran</a>
-              <a href="#analisis">Cara Kerja Analisis</a>
-              <a href="#keamanan">Keamanan</a>
-              <a href="#faq-section">FAQ</a>
+              {NAV_LINKS.map((link) => <a key={link.href} href={link.href}>{link.label}</a>)}
             </nav>
 
             <div className="hero-nav-action">
@@ -258,6 +259,7 @@ export default function PublicPortal({ onSwitchToDashboard }) {
                 <span>{getRoleMode() ? 'Dashboard' : 'Masuk'}</span>
                 <ArrowRight size={14} />
               </button>
+              <MobileNavMenu links={NAV_LINKS} />
             </div>
           </header>
 
@@ -341,6 +343,9 @@ export default function PublicPortal({ onSwitchToDashboard }) {
 
         </section>
       </div>
+
+      {/* ─── MODEL 3D INTERAKTIF ─── */}
+      <CasaModel3D />
 
       {/* ─── ALUR KERJA ─── */}
       <section className="clean-white-section" id="alur">

@@ -1,0 +1,443 @@
+/* Model 3D interaktif di landing page. Semua kelas berawalan c3d- agar tidak bertabrakan dengan CSS lain. */
+.c3d {
+  --bg: #E9EEF2;
+  --glow: #F8FAFC;
+  --ink: #122133;
+  --ink2: #4B5A69;
+  --ink3: #7B8896;
+  --card: #F7F9FB;
+  --line: #D9E0E6;
+  --chip: #ECF0F4;
+  --chip-h: #E1E7EC;
+  --tag: #FFFFFF;
+  --btn: #FFFFFF;
+  --on: #122133;
+  --on-ink: #FFFFFF;
+  --ring: #FFFFFF;
+  color-scheme: light;
+  position: relative;
+  background: #FFFFFF;
+  color: var(--ink);
+  font-family: inherit;
+}
+
+.c3d *,
+.c3d *::before,
+.c3d *::after {
+  box-sizing: border-box;
+}
+
+.c3d button {
+  font-family: inherit;
+}
+
+.c3d-scroller {
+  position: relative;
+  height: 260vh;
+}
+
+.c3d-stage {
+  position: sticky;
+  top: env(safe-area-inset-top, 0px);
+  height: calc(100vh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
+  height: calc(100dvh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 370px;
+  gap: 16px;
+  padding: 16px;
+  max-width: 1480px;
+  margin: 0 auto;
+}
+
+.c3d-viewer {
+  position: relative;
+  border-radius: 22px;
+  overflow: hidden;
+  background: radial-gradient(ellipse at 50% 46%, var(--glow) 0%, var(--bg) 72%);
+  min-height: 0;
+}
+
+.c3d-gl {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  touch-action: pan-y;
+  cursor: grab;
+}
+
+.c3d-gl.c3d-drag {
+  cursor: grabbing;
+}
+
+.c3d-status {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  text-align: center;
+  font-size: 14px;
+  color: var(--ink2);
+  pointer-events: none;
+}
+
+.c3d-head {
+  position: absolute;
+  left: 26px;
+  top: 22px;
+  max-width: 440px;
+  pointer-events: none;
+  z-index: 2;
+}
+
+.c3d-head h2 {
+  font-size: clamp(26px, 3.2vw, 38px);
+  line-height: 1.08;
+  font-weight: 800;
+  letter-spacing: -0.025em;
+  margin: 0 0 10px;
+  color: var(--ink);
+}
+
+.c3d-head p {
+  margin: 0;
+  color: var(--ink2);
+  font-size: 14.5px;
+  line-height: 1.55;
+}
+
+.c3d-head p.c3d-note {
+  margin-top: 8px;
+  font-size: 12.5px;
+  color: var(--ink3);
+}
+
+.c3d-hint {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 16px;
+  font-size: 12.5px;
+  color: var(--ink2);
+}
+
+.c3d-bar {
+  width: 96px;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--line);
+  overflow: hidden;
+}
+
+.c3d-bar i {
+  display: block;
+  height: 100%;
+  width: 0;
+  background: var(--ink);
+}
+
+.c3d-labels {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.c3d-hs {
+  position: absolute;
+  left: 0;
+  top: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  visibility: hidden;
+  will-change: transform;
+}
+
+.c3d-hs.left {
+  flex-direction: row-reverse;
+}
+
+.c3d-hs.on {
+  z-index: 5;
+}
+
+.c3d-dot {
+  pointer-events: auto;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 3px solid var(--ring);
+  background: var(--c);
+  box-shadow: 0 1px 4px rgba(10, 20, 30, 0.25);
+  cursor: pointer;
+  padding: 0;
+  flex: none;
+  transition: box-shadow 0.2s;
+}
+
+.c3d-dot:hover,
+.c3d-hs.on .c3d-dot {
+  box-shadow: 0 0 0 6px color-mix(in srgb, var(--c) 32%, transparent), 0 1px 4px rgba(10, 20, 30, 0.25);
+}
+
+.c3d-tag {
+  pointer-events: auto;
+  cursor: pointer;
+  background: var(--tag);
+  color: var(--ink);
+  font-size: 12.5px;
+  font-weight: 700;
+  padding: 4px 10px;
+  border-radius: 7px;
+  border: 1px solid var(--line);
+  white-space: nowrap;
+}
+
+.c3d-hs.on .c3d-tag {
+  border-color: var(--c);
+}
+
+/* Label dimatikan: hanya label bagian yang sedang dipilih yang tetap tampil */
+.c3d-nolabel .c3d-hs:not(.on) .c3d-tag {
+  display: none;
+}
+
+.c3d-controls {
+  position: absolute;
+  left: 20px;
+  bottom: 20px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  z-index: 2;
+}
+
+.c3d-controls button {
+  font-size: 13.5px;
+  font-weight: 600;
+  padding: 10px 17px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--btn);
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.c3d-controls button.on {
+  background: var(--on);
+  color: var(--on-ink);
+  border-color: var(--on);
+}
+
+.c3d button:focus-visible {
+  outline: 2px solid #3C7BE8;
+  outline-offset: 2px;
+}
+
+.c3d-panel {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 22px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-height: 0;
+}
+
+.c3d-pbody {
+  padding: 24px 24px 20px;
+  overflow: auto;
+  flex: 1;
+  min-height: 0;
+}
+
+.c3d-orb {
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 34% 30%, rgba(255, 255, 255, 0.75) 0%, rgba(255, 255, 255, 0) 46%), var(--c);
+  box-shadow: 0 6px 18px color-mix(in srgb, var(--c) 40%, transparent);
+}
+
+.c3d-cat {
+  display: inline-block;
+  margin-top: 16px;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--c) 16%, transparent);
+  color: var(--ink);
+}
+
+.c3d-panel h3 {
+  font-size: 26px;
+  line-height: 1.15;
+  font-weight: 800;
+  letter-spacing: -0.015em;
+  margin: 10px 0 6px;
+  color: var(--ink);
+}
+
+.c3d-sub {
+  color: var(--ink2);
+  font-size: 15px;
+  line-height: 1.5;
+  margin: 0 0 18px;
+}
+
+.c3d-rows {
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  padding: 14px 0;
+  margin: 0;
+  display: grid;
+  grid-template-columns: 100px minmax(0, 1fr);
+  gap: 11px 14px;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.c3d-rows dt {
+  color: var(--ink3);
+}
+
+.c3d-rows dd {
+  margin: 0;
+}
+
+.c3d-desc {
+  font-size: 14.5px;
+  line-height: 1.7;
+  margin: 16px 0 0;
+  max-width: 60ch;
+}
+
+.c3d-chips {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  padding: 12px;
+  border-top: 1px solid var(--line);
+}
+
+.c3d-chips button {
+  font-size: 12px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 7px 5px;
+  min-height: 36px;
+  border-radius: 11px;
+  border: 1px solid transparent;
+  background: var(--chip);
+  color: var(--ink);
+  cursor: pointer;
+  text-align: center;
+  line-height: 1.25;
+}
+
+.c3d-chips button:hover {
+  background: var(--chip-h);
+}
+
+.c3d-chips button i {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--c);
+  flex: none;
+}
+
+.c3d-chips button.on {
+  border-color: var(--ink);
+  background: var(--card);
+}
+
+@media (max-width: 880px) {
+  .c3d-stage {
+    grid-template-columns: 1fr;
+    grid-template-rows: minmax(0, 1.2fr) minmax(0, 1fr);
+    gap: 10px;
+    padding: 10px;
+  }
+
+  .c3d-head {
+    left: 16px;
+    top: 14px;
+    right: 16px;
+  }
+
+  .c3d-head p.c3d-long,
+  .c3d-head p.c3d-note {
+    display: none;
+  }
+
+  .c3d-hint {
+    margin-top: 8px;
+  }
+
+  .c3d-controls {
+    left: 12px;
+    right: 12px;
+    bottom: 12px;
+    gap: 6px;
+  }
+
+  .c3d-controls button {
+    padding: 8px 12px;
+    font-size: 12.5px;
+  }
+
+  .c3d-pbody {
+    padding: 16px;
+  }
+
+  .c3d-orb {
+    width: 34px;
+    height: 34px;
+  }
+
+  .c3d-cat {
+    margin-top: 10px;
+  }
+
+  .c3d-panel h3 {
+    font-size: 21px;
+  }
+
+  .c3d-chips {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 6px;
+    padding: 8px;
+  }
+
+  .c3d-chips button {
+    font-size: 11.5px;
+    min-height: 38px;
+    padding: 6px 4px;
+  }
+
+  .c3d-tag {
+    font-size: 11.5px;
+    padding: 3px 7px;
+  }
+
+  .c3d-dot {
+    width: 16px;
+    height: 16px;
+    border-width: 2.5px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .c3d-dot {
+    transition: none;
+  }
+}

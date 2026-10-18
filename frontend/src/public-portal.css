@@ -5,6 +5,8 @@ html {
 }
 
 .public-portal-scope {
+  /* Landing page selalu terang walau tema gelap dashboard masih aktif di <html> */
+  color-scheme: light;
   --primary: #00AFA0;
   --primary-hover: #00988b;
   --primary-light: rgba(0, 175, 160, 0.10);
@@ -37,6 +39,31 @@ html {
   min-height: 100vh;
   display: flex;
   flex-direction: column;
+}
+
+/*
+ * Visual direction: clinical instrument.
+ * CASA-AI uses a restrained deep-teal system inspired by microscopy optics.
+ * PNL yellow is kept as a small institutional accent, not a neon UI colour.
+ */
+.public-portal-scope {
+  --primary: #0B6F69;
+  --primary-hover: #085C58;
+  --primary-light: #E8F3F1;
+  --primary-glow: rgba(11, 111, 105, 0.14);
+  --accent-lime: #C49A32;
+  --lime-hover: #AA8122;
+  --lime-dim: rgba(196, 154, 50, 0.12);
+  --bg-page: #F7F9F8;
+  --bg-card: #FFFFFF;
+  --bg-subtle: #EFF4F2;
+  --dark-hero: #0B2029;
+  --dark-card: #112C35;
+  --border: #DCE6E3;
+  --border-subtle: #E9EFED;
+  --text-primary: #102A33;
+  --text-secondary: #496169;
+  --text-muted: #778A90;
 }
 
 /* ─── 1. HERO FULL WIDTH DARK CARD ───────────────────────── */
@@ -1987,4 +2014,451 @@ html {
 
 .tooltip:hover .tooltip-text {
   display: block;
+}
+
+/* --------------------------------------------------------------------------
+   CASA-AI public portal — restrained clinical colour system
+   -------------------------------------------------------------------------- */
+.public-portal-scope .home-hero-dark-card {
+  background: #0B2029;
+  border-bottom-color: rgba(150, 190, 184, 0.22);
+  box-shadow: none;
+}
+
+.public-portal-scope .hero-internal-nav { border-bottom-color: rgba(212, 228, 224, 0.14); }
+.public-portal-scope .brand-dot,
+.public-portal-scope .highlight-lime { color: #7EC8BF; text-shadow: none; }
+
+.public-portal-scope .brand-badge-tag {
+  color: #B9DCD7;
+  background: rgba(126, 200, 191, 0.08);
+  border-color: rgba(126, 200, 191, 0.24);
+}
+
+.public-portal-scope .hero-nav-menu a { color: #B9C8CA; }
+.public-portal-scope .hero-nav-menu a:hover { color: #FFFFFF; }
+
+.public-portal-scope .hero-login-pill-btn {
+  background: transparent;
+  border-color: rgba(212, 228, 224, 0.28);
+}
+
+.public-portal-scope .hero-login-pill-btn:hover {
+  color: #FFFFFF;
+  background: rgba(126, 200, 191, 0.10);
+  border-color: #7EC8BF;
+  box-shadow: none;
+}
+
+.public-portal-scope .hero-eyebrow-pill {
+  color: #D8E9E6;
+  background: rgba(126, 200, 191, 0.08);
+  border-color: rgba(126, 200, 191, 0.28);
+}
+
+.public-portal-scope .hero-eyebrow-pill svg,
+.public-portal-scope .hero-fc-icon svg,
+.public-portal-scope .trust-stat-icon svg { stroke: #7EC8BF; }
+.public-portal-scope .hero-description { color: #B8C8CA; }
+
+.public-portal-scope .btn-cta-lime {
+  color: #FFFFFF;
+  background: #0B756F;
+  border-radius: 10px;
+  box-shadow: none;
+}
+
+.public-portal-scope .btn-cta-lime:hover {
+  background: #0A655F;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.18);
+}
+
+.public-portal-scope .btn-cta-glass {
+  color: #E6EFEE;
+  background: transparent;
+  border-color: rgba(212, 228, 224, 0.28);
+  border-radius: 10px;
+}
+
+.public-portal-scope .btn-cta-glass:hover {
+  background: rgba(126, 200, 191, 0.08);
+  border-color: #7EC8BF;
+}
+
+.public-portal-scope .hero-feature-card,
+.public-portal-scope .hero-trust-stats-strip {
+  background: #102B34;
+  border-color: rgba(177, 207, 202, 0.16);
+  box-shadow: none;
+}
+
+.public-portal-scope .hero-feature-card { border-radius: 14px; }
+.public-portal-scope .hero-feature-card:hover {
+  background: #14343D;
+  border-color: rgba(126, 200, 191, 0.36);
+  box-shadow: none;
+}
+
+.public-portal-scope .hero-fc-icon,
+.public-portal-scope .trust-stat-icon {
+  background: #173740;
+  border-color: rgba(177, 207, 202, 0.18);
+  border-radius: 9px;
+}
+
+.public-portal-scope .hero-feature-card p,
+.public-portal-scope .trust-stat-lbl { color: #A9BDBF; }
+
+.public-portal-scope .clean-white-section {
+  background: #F7F9F8;
+  border-bottom-color: #E3EAE8;
+}
+
+.public-portal-scope .clean-white-section:nth-of-type(even) { background: #FFFFFF; }
+
+.public-portal-scope .section-pill-tag,
+.public-portal-scope .bento-pill {
+  color: #0B6F69;
+  background: #E8F3F1;
+  border-color: #C9DFDB;
+  border-radius: 6px;
+}
+
+.public-portal-scope .section-pill-tag svg,
+.public-portal-scope .protocol-card > svg,
+.public-portal-scope .tab-card-icon-box svg,
+.public-portal-scope .benefit-check-icon svg { stroke: #0B6F69; }
+
+.public-portal-scope .text-teal,
+.public-portal-scope .metric-curr { color: #0B6F69; }
+
+.public-portal-scope .protocol-card,
+.public-portal-scope .tab-showcase-card,
+.public-portal-scope .bento-card,
+.public-portal-scope .who-table-card,
+.public-portal-scope .faq-item-card {
+  border-color: #DCE6E3;
+  box-shadow: 0 8px 24px rgba(22, 54, 59, 0.05);
+}
+
+.public-portal-scope .protocol-badge {
+  color: #0B6F69;
+  background: #E8F3F1;
+  border-color: #C9DFDB;
+}
+
+.public-portal-scope .capsule-tab-btn {
+  border-radius: 8px;
+  border-color: #D5E0DD;
+}
+
+.public-portal-scope .capsule-tab-btn:hover {
+  color: #0B6F69;
+  border-color: #0B6F69;
+  background: #F2F7F5;
+}
+
+.public-portal-scope .capsule-tab-btn.active,
+.public-portal-scope .btn-tab-action {
+  color: #FFFFFF;
+  background: #0B6F69;
+  border-color: #0B6F69;
+  box-shadow: none;
+}
+
+.public-portal-scope .tab-card-icon-box,
+.public-portal-scope .benefit-check-icon {
+  background: #E8F3F1;
+  border-color: #C9DFDB;
+}
+
+.public-portal-scope .card-badge-small {
+  color: #745A18;
+  background: #F7F0DE;
+  border-color: #E8D8A8;
+}
+
+.public-portal-scope .bento-card-dark,
+.public-portal-scope .clinical-cta-card {
+  background: #0B2029;
+  border-color: rgba(126, 200, 191, 0.24);
+  box-shadow: none;
+}
+
+.public-portal-scope .bento-dark-badge,
+.public-portal-scope .cta-mini-pill {
+  color: #D6B75D;
+  background: rgba(196, 154, 50, 0.12);
+}
+
+.public-portal-scope .faq-item-card.open {
+  border-color: #7CB8B1;
+  box-shadow: 0 8px 24px rgba(22, 54, 59, 0.06);
+}
+
+.public-portal-scope .portal-modern-footer {
+  background: #F1F5F3;
+  border-top-color: #DCE6E3;
+}
+
+.public-portal-scope .footer-links-col ul a:hover { color: #0B6F69; }
+
+@media (prefers-reduced-motion: reduce) {
+  .public-portal-scope *,
+  .public-portal-scope *::before,
+  .public-portal-scope *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* ─── Header hero di ponsel: logo, nama, dan tombol Masuk harus muat satu baris ─── */
+@media (max-width: 640px) {
+  .public-portal-scope .hero-internal-nav {
+    gap: 10px;
+  }
+
+  .public-portal-scope .hero-brand {
+    gap: 8px;
+    min-width: 0;
+  }
+
+  .public-portal-scope .hero-brand .brand-logos {
+    gap: 5px;
+  }
+
+  .public-portal-scope .hero-brand .brand-logos-img {
+    height: 26px;
+    max-width: 40px;
+  }
+
+  .public-portal-scope .brand-badge-tag {
+    display: none;
+  }
+
+  .public-portal-scope .hero-brand-text .brand-name {
+    font-size: 1.05rem;
+    white-space: nowrap;
+  }
+
+  .public-portal-scope .hero-nav-action {
+    flex-shrink: 0;
+  }
+
+  .public-portal-scope .hero-login-pill-btn {
+    padding: 7px 12px;
+    font-size: 0.8rem;
+    white-space: nowrap;
+  }
+}
+
+@media (max-width: 360px) {
+  .public-portal-scope .hero-brand .brand-logos-img {
+    height: 22px;
+    max-width: 34px;
+  }
+
+  .public-portal-scope .hero-login-pill-btn svg:first-child {
+    display: none;
+  }
+}
+
+/* ─── Navbar melayang: muncul saat gulir ke atas, hilang saat gulir ke bawah ─── */
+.pp-float-nav {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 60;
+  background: rgba(7, 15, 24, 0.98);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border-bottom: 1px solid rgba(0, 175, 160, 0.25);
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.25);
+  color: #FFFFFF;
+  transform: translateY(-100%);
+  visibility: hidden;
+  transition: transform 0.25s ease, visibility 0s linear 0.25s;
+}
+
+.pp-float-nav.visible {
+  transform: translateY(0);
+  visibility: visible;
+  transition: transform 0.25s ease;
+}
+
+.pp-float-inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 10px 3rem;
+}
+
+@media (max-width: 768px) {
+  .pp-float-inner {
+    padding: 10px 1.2rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pp-float-nav,
+  .pp-float-nav.visible {
+    transition: none;
+  }
+}
+
+/* Tautan anchor tidak boleh tertutup navbar melayang */
+.public-portal-scope [id] {
+  scroll-margin-top: 72px;
+}
+
+/* ─── Menu titik tiga + sidebar untuk layar kecil ─── */
+.public-portal-scope .hero-nav-action {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.pp-menu-btn {
+  display: none;
+  width: 38px;
+  height: 38px;
+  flex: none;
+  border-radius: 9999px;
+  border: 1px solid rgba(212, 228, 224, 0.28);
+  background: transparent;
+  color: #FFFFFF;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.pp-menu-btn:hover {
+  background: rgba(0, 175, 160, 0.2);
+  border-color: #00AFA0;
+}
+
+@media (max-width: 990px) {
+  .pp-menu-btn {
+    display: inline-flex;
+  }
+}
+
+.pp-menu-btn:focus-visible,
+.pp-drawer button:focus-visible,
+.pp-drawer-links a:focus-visible {
+  outline: 2px solid #7EC8BF;
+  outline-offset: 2px;
+}
+
+/* Sidebar dirender ke document.body, jadi tidak bergantung pada .public-portal-scope */
+.pp-drawer-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  justify-content: flex-end;
+  background: rgba(3, 8, 14, 0.6);
+  animation: pp-fade 0.2s ease;
+}
+
+.pp-drawer {
+  width: min(82vw, 320px);
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: #0B1A22;
+  color: #FFFFFF;
+  border-left: 1px solid rgba(0, 175, 160, 0.3);
+  box-shadow: -12px 0 32px rgba(0, 0, 0, 0.35);
+  font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  animation: pp-slide 0.25s ease;
+}
+
+.pp-drawer-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 18px;
+  border-bottom: 1px solid rgba(212, 228, 224, 0.14);
+  font-size: 0.95rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+}
+
+.pp-drawer-close {
+  width: 36px;
+  height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9999px;
+  border: 1px solid rgba(212, 228, 224, 0.28);
+  background: transparent;
+  color: #FFFFFF;
+  cursor: pointer;
+}
+
+.pp-drawer-links {
+  display: flex;
+  flex-direction: column;
+  padding: 6px 0;
+  overflow-y: auto;
+}
+
+.pp-drawer-links a {
+  padding: 15px 18px;
+  color: #D7E4E2;
+  font-size: 1rem;
+  font-weight: 600;
+  text-decoration: none;
+  border-bottom: 1px solid rgba(212, 228, 224, 0.08);
+}
+
+.pp-drawer-links a:hover {
+  background: rgba(0, 175, 160, 0.14);
+  color: #FFFFFF;
+}
+
+@keyframes pp-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes pp-slide {
+  from { transform: translateX(100%); }
+  to { transform: translateX(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pp-drawer-overlay,
+  .pp-drawer {
+    animation: none;
+  }
+}
+
+/* Ponsel sempit: header tetap muat dengan tombol titik tiga */
+@media (max-width: 360px) {
+  .public-portal-scope .hero-login-pill-btn svg:last-child {
+    display: none;
+  }
+
+  .public-portal-scope .hero-nav-action {
+    gap: 6px;
+  }
+
+  .public-portal-scope .pp-menu-btn {
+    width: 34px;
+    height: 34px;
+  }
+}
+
+@media (max-width: 340px) {
+  .public-portal-scope .hero-brand-text {
+    display: none;
+  }
 }

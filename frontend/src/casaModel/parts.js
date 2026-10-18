@@ -1,0 +1,186 @@
+// Data bagian model 3D di landing page: teks penjelasan dan posisi tiap bagian.
+// Teks mengikuti perilaku aplikasi yang sudah berjalan (lihat README dan PROGRESS.md).
+
+export const MX = -2.2;
+export const CX = 2.3;
+export const PW = 1.9;
+export const PH = 1.1875;
+export const SCRW = 2.42;
+export const SCREEN = [CX, 0.9, -0.765];
+export const FPS = 60;
+export const UM = 0.5;
+
+// Ambang klasifikasi pada simulasi; harus sama dengan nilai bawaan aplikasi (dijaga oleh tes)
+export const SIM_THRESHOLDS = { progSpeed: 25, progLinearity: 0.8, immotileSpeed: 5, minObservations: 15 };
+
+export const STAGE_TITLES = [
+  '1. Unggah video',
+  '2. Deteksi YOLO',
+  '3. Pelacakan (ByteTrack)',
+  '4. Konsentrasi (median deteksi)',
+  '5. Klasifikasi motilitas',
+  '6. Heatmap lintasan',
+];
+
+export const PARTS = [
+  {
+    id: 'mikroskop', name: 'Mikroskop', short: 'Mikroskop', c: '#5BA4C9', cat: 'Perangkat keras',
+    sub: 'Mikroskop berkamera untuk merekam sampel',
+    f: 'Memperbesar sampel agar sperma terlihat pada video',
+    s: 'Mikroskop optik dengan port kamera digital',
+    l: 'Di ruang pemeriksaan, dioperasikan analis',
+    p: 'Setiap ganti perbesaran, skala µm/px perlu diukur ulang',
+    d: 'CASA-AI bekerja dari video, bukan dari alat khusus. Mikroskop dan kamera yang berbeda dapat dipakai selama videonya jelas dan nilai kalibrasinya diukur untuk perangkat itu. Perbesaran dan resolusi video menentukan nilai skala piksel di profil kalibrasi.',
+    kind: 'obj', a: [MX - 0.95, 0.2, 0.6], side: 'left', off: [0, 0, 0],
+  },
+  {
+    id: 'stage', name: 'Stage dan bilik hitung', short: 'Bilik hitung', c: '#EE6A36', cat: 'Perangkat keras',
+    sub: 'Tempat sampel diletakkan pada kedalaman yang diketahui',
+    f: 'Menahan sampel pada kedalaman tetap agar volume bidang pandang dapat dihitung',
+    s: 'Preset Makler 10 µm, Leja 20 µm, Improved Neubauer 100 µm, atau kedalaman custom; stage berpemanas bila tersedia',
+    l: 'Di meja objek mikroskop',
+    p: 'Jenis bilik di sistem harus sama dengan bilik yang dipakai',
+    d: 'Kedalaman bilik dipakai langsung dalam rumus konsentrasi. Jika sistem diatur Makler padahal bilik yang dipakai Leja, konsentrasi meleset dua kali lipat. Sistem menolak kombinasi tipe dan kedalaman yang tidak cocok; untuk kedalaman lain pilih bilik custom.',
+    kind: 'obj', a: [MX - 0.78, 1.24, 0.45], side: 'left', off: [0, 0.55, 1.0],
+  },
+  {
+    id: 'kamera', name: 'Kamera mikroskop', short: 'Kamera', c: '#4C8DF6', cat: 'Perangkat keras',
+    sub: 'Merekam video yang diunggah ke CASA-AI',
+    f: 'Merekam video sampel yang akan dianalisis',
+    s: 'Kamera digital USB atau C-mount; FPS dibaca dari metadata video atau diisi manual',
+    l: 'Terpasang di port kamera mikroskop',
+    p: 'FPS harus sesuai rekaman asli karena dipakai menghitung kecepatan',
+    d: 'Kecepatan dihitung dari jarak per waktu, dan waktu berasal dari FPS. Mode otomatis memakai metadata video. Jika metadata tidak ada atau tidak sesuai, misalnya pada video slow motion, analis mengisi FPS rekaman yang sebenarnya.',
+    kind: 'obj', a: [MX - 0.32, 3.82, 0.05], side: 'left', off: [0, 0.9, 0.2],
+  },
+  {
+    id: 'kalibrasi', name: 'Profil kalibrasi', short: 'Kalibrasi', c: '#E9B949', cat: 'Kalibrasi',
+    sub: 'Mengubah piksel menjadi ukuran sebenarnya',
+    f: 'Menerjemahkan piksel menjadi mikrometer dan µm per detik',
+    s: 'Skala piksel (µm/px), FPS, kedalaman bilik, dan faktor pengenceran',
+    l: 'Disimpan Super Admin; analis dapat mengubahnya untuk satu analisis',
+    p: 'Skala piksel diukur dengan slide mikrometer pada perbesaran yang dipakai',
+    d: 'Tanpa kalibrasi, hasil hanya dalam piksel dan tidak dapat dibandingkan dengan nilai acuan. Slide mikrometer difoto sekali untuk setiap perbesaran dan resolusi, lalu nilainya dicatat sebagai preset. Nilai yang dipakai disimpan bersama setiap hasil, jadi hasil lama tidak berubah ketika preset diganti.',
+    kind: 'obj', a: [MX + 1.6, 0.03, 1.55], side: 'left', off: [0, 0.9, 0.4],
+  },
+  {
+    id: 'laptop', name: 'Komputer dan aplikasi CASA-AI', short: 'Komputer', c: '#6B7A8C', cat: 'Perangkat keras',
+    sub: 'Menjalankan antarmuka web dan mesin analisis',
+    f: 'Menjalankan aplikasi web dan pipeline analisis',
+    s: 'Antarmuka React, backend FastAPI, analisis YOLO11n dan ByteTrack',
+    l: 'Terhubung ke kamera; layarnya menampilkan tahap analisis yang dipilih',
+    p: 'Setiap peran hanya melihat menu tugasnya',
+    d: 'Lima peran masuk dengan akun masing-masing: Front Office, analis, dokter, pasien, dan Super Admin. Hak akses diperiksa di server untuk setiap permintaan. Layar komputer pada model ini menampilkan simulasi tahap yang sedang dipilih.',
+    kind: 'obj', a: [CX + 1.3, 0.06, 0.5], side: 'right', off: [0, 0, 0],
+  },
+  {
+    id: 'sampel', name: 'Registrasi dan data sampel', short: 'Sampel pasien', c: '#2FB5A8', cat: 'Pra-analitik',
+    sub: 'Tahap pertama sebelum mikroskop',
+    f: 'Mencatat identitas pasien dan pemeriksaan fisik sampel',
+    s: 'No. RM otomatis, label barcode dan QR, masa pantang 2 sampai 7 hari, volume, likuefaksi, viskositas, pH',
+    l: 'Front Office mendaftarkan; analis mengisi data makroskopis',
+    p: 'Volume wajib diisi sebelum analisis dijalankan',
+    d: 'Front Office mendaftarkan pasien, menjadwalkan pemeriksaan, dan mencetak label sampel agar tidak tertukar. Sampel baru dapat diterima analis setelah masa pantang selesai. Analis lalu mengisi volume, waktu likuefaksi, viskositas, pH, dan penampakan. Volume juga dipakai untuk menghitung jumlah total sperma pada tinjauan dokter.',
+    kind: 'obj', a: [-0.55, 0.42, 0.6], side: 'right', off: [-0.2, 0.5, 1.0],
+  },
+  {
+    id: 'sel', name: 'Sel sperma (model 3D)', short: 'Sel sperma', c: '#B5CC2E', cat: 'Objek yang dianalisis',
+    sub: 'Bentuk dan bagian utama sel yang dideteksi',
+    f: 'Menunjukkan bagian sel sperma yang tampak pada video mikroskop',
+    s: 'Kepala dengan akrosom dan nukleus, bagian tengah dengan mitokondria, dan ekor (flagel)',
+    l: 'Objek yang bergerak di bidang pandang; model ini hanya ilustrasi',
+    p: 'CASA-AI melacak posisi sel; bagian dalam sel tidak dianalisis',
+    d: 'Kepala membawa nukleus yang berisi materi genetik, dengan akrosom di ujungnya. Bagian tengah berisi mitokondria penghasil energi untuk bergerak, dan ekor (flagel) menggerakkan sel. Pada video, YOLO11n menandai posisi setiap sel, lalu ByteTrack menyambungkannya menjadi lintasan yang dipakai menghitung kecepatan dan kelurusan. Model ini ilustrasi anatomi, bukan hasil pemindaian sel nyata.',
+    kind: 'obj', model: true, pos: [2.6, 3.9, 0.6], length: 6.2, tilt: 0.25, endScale: 0.7, a: [2.6, 4.35, 0.6], side: 'left', off: [-4.3, 2.0, -0.4],
+  },
+  {
+    id: 'dataset', name: 'Dataset dan pelatihan YOLO', short: 'Dataset YOLO', c: '#E86FA6', cat: 'Perangkat lunak',
+    sub: 'Contoh yang mengajari model mengenali sperma',
+    f: 'Melatih YOLO11n mendeteksi sperma pada frame video',
+    s: 'Belasan ribu frame video mikroskop berlabel kotak; pelatihan 50 epoch pada resolusi 640 px',
+    l: 'Dikerjakan sekali sebelum sistem dipakai',
+    p: 'Bobot model disimpan di server; analisis ditolak jika bobot tidak ada',
+    d: 'Hasil pelatihan disimpan sebagai berkas bobot yang dimuat backend setiap kali analisis berjalan. Jika bobot tidak ditemukan, analisis ditolak dengan pesan yang jelas dan sistem tidak memakai model umum sebagai pengganti.',
+    kind: 'obj', a: [0.62, 0.6, 1.3], fc: [0.2, 0.33, 1.3], side: 'right', off: [2.1, 5.12, -1.9],
+  },
+  {
+    id: 'rekam', name: '1. Unggah video', short: '1. Unggah', c: '#7FB4FF', cat: 'Tahap analitik',
+    sub: 'Video dari kamera masuk ke pemeriksaan', stage: 0,
+    f: 'Menerima video sampel dari analis dan menyimpannya bersama pemeriksaan',
+    s: 'Unggah dari antarmuka analis; FPS otomatis atau manual; ambang keyakinan bawaan 0,25',
+    l: 'Awal tahap analitik; status pemeriksaan IN_PROGRESS',
+    p: 'Sampel harus sudah diterima dan data makroskopis terisi',
+    d: 'Analis memilih pemeriksaan, memeriksa nilai kalibrasi, lalu mengunggah video. Progres pemrosesan tampil per frame. Video asli disimpan sebagai sumber hasil, dan analisis ulang membuat hasil baru tanpa menghapus yang lama.',
+    kind: 'stage', grid: [-2.2, 4.05],
+  },
+  {
+    id: 'deteksi', name: '2. Deteksi YOLO', short: '2. Deteksi', c: '#3FBF6F', cat: 'Tahap analitik',
+    sub: 'Model menemukan posisi setiap sperma', stage: 1,
+    f: 'Menandai posisi setiap sperma dengan kotak di setiap frame',
+    s: 'YOLO11n; setiap kotak punya nilai keyakinan',
+    l: 'Tahap analitik kedua',
+    p: 'Ambang keyakinan dapat diatur per analisis',
+    d: 'Setiap kotak membawa nilai keyakinan, misalnya 0,94. Ambang rendah menangkap lebih banyak sperma tetapi menambah deteksi keliru, sedangkan ambang tinggi bisa melewatkan sperma yang buram. Jumlah deteksi per frame menjadi dasar hitungan sel dan konsentrasi. Deteksi yang keliru dapat dikoreksi analis di tahap review.',
+    kind: 'stage', grid: [0, 4.05],
+  },
+  {
+    id: 'lacak', name: '3. Pelacakan', short: '3. Pelacakan', c: '#9A88EE', cat: 'Tahap analitik',
+    sub: 'Menyambung deteksi menjadi lintasan', stage: 2,
+    f: 'Memberi ID pada tiap sperma dan menyimpan posisinya dari frame ke frame',
+    s: 'ByteTrack; per ID dipakai satu segmen berurutan terpanjang dengan minimal 15 pengamatan',
+    l: 'Tahap analitik ketiga',
+    p: 'ID bisa berganti ketika dua sperma bersilangan',
+    d: 'Pelacak mencocokkan deteksi di frame berikutnya dengan sperma yang sama. Celah antarframe tidak disambung, dan lintasan yang terlalu pendek tidak ikut dihitung. Saat dua sperma bersenggolan ID bisa tertukar, sehingga satu ID belum tentu satu sel dan hasil tetap perlu ditinjau manusia.',
+    kind: 'stage', grid: [2.2, 4.05],
+  },
+  {
+    id: 'konsentrasi', name: '4. Konsentrasi', short: '4. Konsentrasi', c: '#F07F7F', cat: 'Tahap analitik',
+    sub: 'Juta sperma per mililiter dari median jumlah deteksi', stage: 3,
+    f: 'Menghitung estimasi konsentrasi dari jumlah sperma yang terlihat di bidang pandang',
+    s: 'Median deteksi per frame × faktor pengenceran ÷ volume bidang pandang',
+    l: 'Tahap analitik keempat',
+    p: 'Bergantung pada skala piksel dan kedalaman bilik yang benar',
+    d: 'Volume bidang pandang adalah lebar × tinggi (piksel) × skala² × kedalaman bilik. Median jumlah deteksi per frame dipakai, bukan jumlah ID, karena ID baru bisa muncul setiap kali lintasan terputus. Hasilnya estimasi yang mengandaikan sampel tercampur rata.',
+    kind: 'stage', grid: [-2.2, 2.4],
+  },
+  {
+    id: 'motilitas', name: '5. Klasifikasi motilitas', short: '5. Motilitas', c: '#7B5CF0', cat: 'Tahap analitik',
+    sub: 'Dihitung dengan rumus, bukan ditebak model', stage: 4,
+    f: 'Mengelompokkan lintasan menjadi progresif (PR), non-progresif (NP), dan imotil (IM)',
+    s: 'VCL, VSL, dan LIN; VAP, STR, dan WOB sebagai estimasi eksperimental',
+    l: 'Tahap analitik kelima',
+    p: 'Ambang bawaan: PR bila VCL ≥ 25 µm/s dan LIN ≥ 0,8; IM bila VCL < 5 µm/s; sisanya NP. Ambang dapat diatur',
+    d: 'Model hanya mendeteksi dan melacak. Kecepatan dan kelurusan dihitung dengan rumus tetap dari koordinat lintasan, skala, dan FPS, sehingga setiap angka dapat ditelusuri. Lintasan yang cepat dan lurus menjadi progresif, yang hampir diam menjadi imotil, dan yang bergerak tanpa memenuhi syarat progresif menjadi non-progresif. Analisis memakai bidang gambar 2D.',
+    kind: 'stage', grid: [0, 2.4],
+  },
+  {
+    id: 'heatmap', name: '6. Heatmap lintasan', short: '6. Heatmap', c: '#D4553F', cat: 'Tahap analitik',
+    sub: 'Peta jejak berenang seluruh sperma', stage: 5,
+    f: 'Menggambar semua lintasan sperma dalam satu gambar',
+    s: 'Garis lintasan di atas latar gelap, dihasilkan bersama video beranotasi',
+    l: 'Akhir tahap analitik',
+    p: 'Dapat dilihat analis dan dokter saat tinjauan',
+    d: 'Dari heatmap terlihat apakah sperma umumnya berenang lurus, berbelok, atau berputar di tempat. Video beranotasi menampilkan kotak dan ID di setiap frame, dan keduanya disimpan bersama hasil analisis.',
+    kind: 'stage', grid: [2.2, 2.4],
+  },
+  {
+    id: 'review', name: 'Review analis', short: 'Review analis', c: '#B5835A', cat: 'Verifikasi',
+    sub: 'Pemeriksaan manusia sebelum hasil ke dokter',
+    f: 'Memeriksa video dan heatmap, memperbaiki deteksi yang keliru, lalu mengirim ke dokter',
+    s: 'Editor koreksi per frame: hapus, tambah, geser, atau tandai bukan sperma; metrik dihitung ulang',
+    l: 'Setelah analisis; pengiriman mengubah status ke PENDING_REVIEW',
+    p: 'Pengiriman butuh data makroskopis lengkap dan analisis yang selesai',
+    d: 'Analis melihat video beranotasi dan heatmap. Jika ada deteksi yang salah, analis memperbaikinya di editor, lintasan diteruskan ke frame berikutnya, dan metrik dihitung ulang. Setiap revisi tersimpan. Setelah hasil sesuai, analis mengirimkannya ke dokter. Analis tidak dapat menyetujui atau merilis laporan.',
+    kind: 'pivot', b: [CX + 2.0, 0.02, 0.35], ry: -0.3, t: [CX + 4.25, 2.4, -0.6], s1: 1.7, side: 'right',
+  },
+  {
+    id: 'laporan', name: 'Laporan dokter', short: 'Laporan dokter', c: '#2E5C9E', cat: 'Pasca-analitik',
+    sub: 'Dokter meninjau, menandatangani, lalu merilis',
+    f: 'Menggabungkan data makroskopis dan hasil analisis dengan interpretasi dokter',
+    s: 'PR, NP, IM, data makroskopis, interpretasi dan saran dokter, tanda tangan dan nomor SIP; cetak atau simpan PDF',
+    l: 'Dokter menyetujui (APPROVED), lalu merilis (RELEASED)',
+    p: 'Setelah dirilis, laporan terkunci dan hanya dapat dibaca',
+    d: 'Dokter melihat hasil beserta perbandingannya dengan batas bawah acuan WHO edisi 6, menulis interpretasi, lalu menandatangani dengan tanda tangan digital dan nomor SIP. Dokter juga dapat mengembalikan hasil ke analis dengan alasan tertulis. Pasien membuka laporannya sendiri di portal setelah dirilis.',
+    kind: 'pivot', b: [CX + 2.2, 0.02, 1.4], ry: 0.15, t: [CX + 4.25, 4.05, -0.6], s1: 1.7, side: 'right',
+  },
+];
