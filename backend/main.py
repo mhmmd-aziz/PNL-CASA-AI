@@ -1,7 +1,6 @@
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException, BackgroundTasks, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, FileResponse
-from fastapi.staticfiles import StaticFiles
 import shutil
 import os
 import sys
@@ -40,6 +39,26 @@ except ImportError as e:
 
 app = FastAPI(title="CASA-AI API")
 
+from auth_routes import router as auth_router, require_roles, sign_output_url, verify_output_url
+app.include_router(auth_router)
+from examinations_routes import router as examinations_router, patients_router, check_analysis_target, persist_video_analysis
+app.include_router(examinations_router)
+app.include_router(patients_router)
+from examinations_routes import ensure_queue_columns
+ensure_queue_columns()
+from review_routes import router as review_router
+app.include_router(review_router)
+from reports_routes import router as reports_router
+app.include_router(reports_router)
+from admin_routes import router as admin_router
+app.include_router(admin_router)
+from dashboard_routes import router as dashboard_router
+app.include_router(dashboard_router)
+from correction_routes import router as correction_router, capture_annotations, register_analysis
+app.include_router(correction_router)
+from detection_routes import router as detection_router
+app.include_router(detection_router)
+
 # Enable CORS for frontend
 app.add_middleware(
     CORSMiddleware,
@@ -55,7 +74,23 @@ UPLOAD_DIR.mkdir(exist_ok=True)
 OUTPUT_DIR.mkdir(exist_ok=True)
 
 # Mount outputs so videos can be served to the frontend
-app.mount("/outputs", StaticFiles(directory=str(OUTPUT_DIR)), name="outputs")
+
+@app.get("/outputs/{file_name}")
+async def get_output_file(
+    file_name: str,
+    uid: Optional[int] = None,
+    exp: Optional[int] = None,
+    sig: Optional[str] = None,
+):
+    """Hasil video/gambar analisis: hanya lewat URL bertanda tangan milik analis atau dokter."""
+    user = verify_output_url(file_name, uid, exp, sig)
+    if user["role"] not in ("ANALYST", "PHYSICIAN"):
+        raise HTTPException(status_code=403, detail="Peran Anda tidak memiliki akses ke berkas ini.")
+    safe_name = Path(file_name).name
+    file_path = OUTPUT_DIR / safe_name
+    if safe_name != file_name or not file_path.is_file():
+        raise HTTPException(status_code=404, detail="Berkas tidak ditemukan.")
+    return FileResponse(file_path)
 
 
 def read_calibration():
@@ -66,12 +101,12 @@ def read_calibration():
 
 
 @app.get("/api/calibration", response_model=CalibrationSettings)
-async def get_calibration():
+async def get_calibration(user: dict = Depends(require_roles("ANALYST", "SUPER_ADMIN"))):
     return read_calibration()
 
 
 @app.put("/api/calibration", response_model=CalibrationSettings)
-async def update_calibration(settings: CalibrationSettings):
+async def update_calibration(settings: CalibrationSettings, user: dict = Depends(require_roles("SUPER_ADMIN"))):
     try:
         return save_calibration(settings)
     except OSError as error:
@@ -125,6 +160,7 @@ def trained_model_path():
 # Stores for background tasks
 PROGRESS_STORE = {}
 RESULT_STORE = {}
+TASK_OWNERS = {}
 
 def process_video_task(
     task_id: str, 
@@ -132,31 +168,54 @@ def process_video_task(
     model_path: str, 
     output_dir: str, 
     conf_thres: float,
-    calibration: CalibrationSettings
+    calibration: CalibrationSettings,
+    examination_id: Optional[int] = None,
+    actor_id: Optional[int] = None
 ):
     try:
         def progress_callback(frame_idx, total_frames):
             PROGRESS_STORE[task_id] = {"status": "processing", "frame": frame_idx, "total_frames": total_frames}
             
-        full_data, output_video_path, heatmap_path = run_pipeline(
-            video_path=video_path,
-            model_path=model_path,
-            output_dir=output_dir,
-            conf_thres=conf_thres,
-            progress_callback=progress_callback,
-            **calibration.model_dump()
-        )
-        
+        with capture_annotations(task_id) as (annotations_path, capture):
+            full_data, output_video_path, heatmap_path = run_pipeline(
+                video_path=video_path,
+                model_path=model_path,
+                output_dir=output_dir,
+                conf_thres=conf_thres,
+                progress_callback=progress_callback,
+                annotation_callback=capture,
+                **calibration.model_dump()
+            )
+
         full_data = make_serializable(full_data)
         
         video_filename = Path(output_video_path).name
-        video_url = f"/outputs/{video_filename}"
+        video_url = sign_output_url(video_filename, actor_id)
         
         heatmap_filename = Path(heatmap_path).name
-        heatmap_url = f"/outputs/{heatmap_filename}"
+        heatmap_url = sign_output_url(heatmap_filename, actor_id)
         
+        run_id = None
+        if examination_id is not None:
+            run_id = persist_video_analysis(
+                examination_id=examination_id,
+                actor_id=actor_id,
+                source_path=video_path,
+                output_video_path=output_video_path,
+                heatmap_path=heatmap_path,
+                data=full_data,
+                calibration=calibration.model_dump(),
+                model_path=model_path,
+                conf_thres=conf_thres,
+            )
+
+        register_analysis(task_id, actor_id, video_path, annotations_path, full_data, output_video_path, heatmap_path,
+                          calibration.model_dump(), model_path, conf_thres, examination_id, run_id)
+
         RESULT_STORE[task_id] = {
             "success": True,
+            "analysis_id": task_id,
+            "revision": 0,
             "data": full_data,
             "video_url": video_url,
             "heatmap_url": heatmap_url
@@ -174,9 +233,13 @@ async def analyze_video(
     background_tasks: BackgroundTasks,
     video: UploadFile = File(...),
     conf_thres: float = Form(0.25, gt=0, le=1, allow_inf_nan=False),
-    calibration: CalibrationSettings = Depends(analysis_calibration)
+    calibration: CalibrationSettings = Depends(analysis_calibration),
+    examination_id: Optional[int] = Form(None),
+    user: dict = Depends(require_roles("ANALYST"))
 ):
     try:
+        if examination_id is not None:
+            check_analysis_target(examination_id, user)
         task_id = str(uuid.uuid4())
         model_path = trained_model_path()
         
@@ -185,6 +248,7 @@ async def analyze_video(
         with open(video_path, "wb") as buffer:
             shutil.copyfileobj(video.file, buffer)
             
+        TASK_OWNERS[task_id] = user["id"]
         PROGRESS_STORE[task_id] = {"status": "starting", "frame": 0}
         
         background_tasks.add_task(
@@ -194,7 +258,9 @@ async def analyze_video(
             model_path=model_path,
             output_dir=str(OUTPUT_DIR),
             conf_thres=conf_thres,
-            calibration=calibration
+            calibration=calibration,
+            examination_id=examination_id,
+            actor_id=user["id"]
         )
         
         return JSONResponse(content={"task_id": task_id})
@@ -207,14 +273,17 @@ async def analyze_video(
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/progress/{task_id}")
-async def get_progress(task_id: str):
+async def get_progress(task_id: str, user: dict = Depends(require_roles("ANALYST"))):
+    if TASK_OWNERS.get(task_id) != user["id"]:
+        raise HTTPException(status_code=404, detail="Task not found")
     if task_id in RESULT_STORE:
         result = RESULT_STORE[task_id]
         # Clean up safely
         PROGRESS_STORE.pop(task_id, None)
         RESULT_STORE.pop(task_id, None)
+        TASK_OWNERS.pop(task_id, None)
         return JSONResponse(content={"status": "completed", "result": result})
-        
+
     if task_id in PROGRESS_STORE:
         return JSONResponse(content=PROGRESS_STORE[task_id])
         
@@ -224,29 +293,41 @@ async def get_progress(task_id: str):
 async def analyze_image_endpoint(
     image: UploadFile = File(...),
     conf_thres: float = Form(0.25, gt=0, le=1, allow_inf_nan=False),
-    calibration: CalibrationSettings = Depends(analysis_calibration)
+    calibration: CalibrationSettings = Depends(analysis_calibration),
+    examination_id: Optional[int] = Form(None),
+    user: dict = Depends(require_roles("ANALYST"))
 ):
+    if examination_id is not None:
+        raise HTTPException(status_code=422, detail="Analisis citra belum bisa dikaitkan ke pemeriksaan. Gunakan video untuk sampel pemeriksaan.")
     try:
         model_path = trained_model_path()
         image_path = UPLOAD_DIR / f"{uuid.uuid4()}{Path(image.filename or 'image.jpg').suffix}"
         with open(image_path, "wb") as buffer:
             shutil.copyfileobj(image.file, buffer)
             
-        full_data, output_image_path = analyze_single_image(
-            image_path=str(image_path),
-            model_path=model_path,
-            output_dir=str(OUTPUT_DIR),
-            conf_thres=conf_thres,
-            calibration=calibration
-        )
-        
+        analysis_id = image_path.stem
+        with capture_annotations(analysis_id) as (annotations_path, capture):
+            full_data, output_image_path = analyze_single_image(
+                image_path=str(image_path),
+                model_path=model_path,
+                output_dir=str(OUTPUT_DIR),
+                conf_thres=conf_thres,
+                calibration=calibration,
+                annotation_callback=capture
+            )
+
         full_data = make_serializable(full_data)
         
         image_filename = Path(output_image_path).name
-        image_url = f"/outputs/{image_filename}"
+        image_url = sign_output_url(image_filename, user["id"])
         
+        register_analysis(analysis_id, user["id"], image_path, annotations_path, full_data, output_image_path, None,
+                          calibration.model_dump(), model_path, conf_thres, is_image=True)
+
         return JSONResponse(content={
             "success": True,
+            "analysis_id": analysis_id,
+            "revision": 0,
             "data": full_data,
             "video_url": image_url,  # Use same key as video endpoint for frontend compatibility
             "heatmap_url": None

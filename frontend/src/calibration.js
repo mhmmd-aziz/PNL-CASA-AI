@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import axios from 'axios';
 import { API_BASE_URL } from './api.js';
+import { getAuthHeader } from './auth.js';
 
 export const DEFAULT_CALIBRATION = {
   pixel_scale: 0.8,
@@ -68,7 +69,7 @@ export function useCalibration() {
 
   useEffect(() => {
     const controller = new AbortController();
-    axios.get(CALIBRATION_URL, { signal: controller.signal })
+    axios.get(CALIBRATION_URL, { signal: controller.signal, headers: getAuthHeader() })
       .then(({ data }) => {
         if (controller.signal.aborted) return;
         setCalibration(data);
@@ -113,7 +114,7 @@ export function useCalibration() {
     try {
       ensureCalibration();
       setCalibrationSaving(true);
-      const { data } = await axios.put(CALIBRATION_URL, calibration);
+      const { data } = await axios.put(CALIBRATION_URL, calibration, { headers: getAuthHeader() });
       setCalibration(data);
       setSavedCalibration(data);
       setCalibrationError('');

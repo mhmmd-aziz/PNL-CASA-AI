@@ -37,7 +37,11 @@ test('each role only reaches the menus defined for it', () => {
   assert.ok(!canAccessTab('analis', 'Lab Reports'));
   assert.ok(canAccessTab('dokter', 'Perlu Validasi'));
   assert.ok(!canAccessTab('dokter', 'Analysis Lab'));
-  assert.deepEqual(ROLES.pasien.tabs, ['My Reports']);
+  assert.deepEqual(ROLES.pasien.tabs, ['My Queue', 'My Reports', 'Account Settings']);
+  assert.equal(ROLES.superadmin.tabs[0], 'Dashboard');
+  for (const role of Object.values(ROLES)) {
+    if (role.id !== 'superadmin') assert.equal(role.tabs.includes('Dashboard'), false);
+  }
   assert.ok(!canAccessTab('superadmin', 'Patient Records'));
   assert.ok(!canAccessTab('unknown', 'Overview'));
 });

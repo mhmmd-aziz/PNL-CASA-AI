@@ -140,6 +140,7 @@ export function CalibrationSummary({ data }) {
   if (!calibration) return null;
   return (
     <div style={{ margin: '12px 0', padding: '10px 12px', border: '1px solid var(--border)', borderRadius: '8px', fontSize: '0.76rem', lineHeight: 1.7 }}>
+      {data.manual_correction && <div role="status"><strong>Hasil koreksi manual, revisi {data.manual_correction.revision}.</strong> {data.manual_correction.changed_frames.length} frame dikoreksi. Alasan: {data.manual_correction.reason}. Hasil AI asli tetap tersimpan; lintasan tidak dilanjutkan otomatis.</div>}
       <strong>Kalibrasi yang dipakai analisis:</strong> {calibration.pixel_scale} µm/px · Bilik {calibration.chamber_type} / {calibration.chamber_depth} µm · Pengenceran {calibration.dilution_factor}×<br />
       {calibration.fps === null ? 'FPS: tidak berlaku untuk citra tunggal' : `FPS: ${calibration.fps} (${calibration.fps_source === 'video_metadata' ? 'metadata video' : 'manual'})`} · Resolusi {calibration.frame_width}×{calibration.frame_height} px<br />
       Ambang PR: VCL ≥ {calibration.prog_speed_threshold} µm/s dan LIN ≥ {calibration.prog_linearity_threshold}; IM: VCL &lt; {calibration.immotile_speed_threshold} µm/s.

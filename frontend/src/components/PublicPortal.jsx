@@ -5,8 +5,6 @@ import {
   Activity, 
   HelpCircle, 
   Microscope,
-  Lock,
-  ArrowRight,
   Sparkles,
   Compass,
   Zap,
@@ -27,7 +25,6 @@ import {
 } from 'lucide-react';
 import { getRoleMode } from '../auth';
 import '../public-portal.css';
-import BrandLogos from './BrandLogos';
 
 export default function PublicPortal({ onSwitchToDashboard }) {
   const navigate = useNavigate();
@@ -135,37 +132,6 @@ export default function PublicPortal({ onSwitchToDashboard }) {
       <div className="hero-outer-wrapper">
         <section className="home-hero-dark-card" id="hero">
           
-          {/* Integrated Navbar inside Hero Card */}
-          <header className="hero-internal-nav">
-            <div className="hero-brand" onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}>
-              <BrandLogos size={34} />
-              <div className="hero-brand-text">
-                <span className="brand-name">CASA<span className="brand-dot">·</span>AI</span>
-                <span className="brand-badge-tag">PRO CLINICAL</span>
-              </div>
-            </div>
-
-            <nav className="hero-nav-menu">
-              <a href="#hero">Beranda</a>
-              <a href="#showcase">Fitur Unggulan</a>
-              <a href="#bento-section">Teknologi</a>
-              <a href="#who-standard">Standar WHO 6th</a>
-              <a href="#faq-section">FAQ</a>
-            </nav>
-
-            <div className="hero-nav-action">
-              <button 
-                onClick={handleGoToDashboard}
-                className="hero-login-pill-btn"
-                title={getRoleMode() ? 'Buka Dashboard Medis' : "Masuk ke Dashboard Staf Medis"}
-              >
-                <Lock size={14} />
-                <span>{getRoleMode() ? 'Dashboard Medis' : 'Login Staf Medis'}</span>
-                <ArrowRight size={14} />
-              </button>
-            </div>
-          </header>
-
           {/* Hero Main Content (2 Columns on Desktop) */}
           <div className="hero-main-content">
             

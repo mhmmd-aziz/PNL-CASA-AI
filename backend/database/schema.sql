@@ -153,6 +153,13 @@ CREATE TABLE IF NOT EXISTS examinations (
     current_analyst_id          INTEGER,
     current_physician_id        INTEGER,
 
+    -- Antrean harian (tanggal jadwal WIB dan nomor urut, misalnya A-001)
+    queue_date                  TEXT,
+    queue_number                TEXT,
+    -- Pantang: waktu mulai dan waktu siap diperiksa (mulai + lama pantang)
+    abstinence_start_at         TEXT,
+    abstinence_ready_at         TEXT,
+
     FOREIGN KEY (patient_id) REFERENCES patients(id) ON DELETE RESTRICT,
     FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL,
     FOREIGN KEY (current_analyst_id) REFERENCES users(id) ON DELETE SET NULL,

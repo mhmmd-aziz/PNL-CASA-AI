@@ -1,0 +1,114 @@
+import assert from 'node:assert/strict';
+import { createRequire } from 'node:module';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import path from 'node:path';
+import fs from 'node:fs/promises';
+
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const requireFrontend = createRequire(path.join(root, 'frontend', 'package.json'));
+const { createServer } = await import(pathToFileURL(requireFrontend.resolve('vite')));
+const playwright = process.env.PLAYWRIGHT_PACKAGE ? await import(pathToFileURL(process.env.PLAYWRIGHT_PACKAGE)) : await import('playwright');
+const server = await createServer({ root: path.join(root, 'frontend'), configFile: path.join(root, 'frontend', 'vite.config.js'), server: { host: '127.0.0.1', port: 5198, strictPort: true } });
+await server.listen();
+let browser;
+try {
+  browser = await playwright.chromium.launch({ headless: true });
+  const page = await browser.newPage({ viewport: { width: 1280, height: 960 } });
+  const errors = [];
+  page.on('pageerror', (error) => errors.push(error.message));
+  const originalBoxes = [{ id: 'det-0', box: [100, 100, 180, 180], label: 'sperm', track_id: 1, confidence: .9 }];
+  const settings = { width: 640, height: 480, frame_count: 3, is_image: false, revision: 0, fps: 30 };
+  let overrides = {};
+  let savedPayload;
+  await page.route('**/api/analysis/browser-test/**', async (route) => {
+    const url = new URL(route.request().url());
+    if (url.pathname.endsWith('/annotations')) return route.fulfill({ json: settings });
+    if (url.pathname.endsWith('/frame-image')) return route.fulfill({ contentType: 'image/svg+xml', body: '<svg xmlns="http://www.w3.org/2000/svg" width="640" height="480"><rect width="640" height="480" fill="#071b23"/><ellipse cx="140" cy="140" rx="24" ry="15" fill="#c5e8e8"/></svg>' });
+    if (url.pathname.includes('/frames/')) {
+      const frame = Number(url.pathname.split('/').at(-1));
+      return route.fulfill({ json: { frame, revision: settings.revision, original: originalBoxes, boxes: overrides[frame] || originalBoxes } });
+    }
+    if (url.pathname.endsWith('/corrections')) {
+      savedPayload = route.request().postDataJSON();
+      settings.revision += 1;
+      overrides = Object.fromEntries(savedPayload.frames.map((frame) => [frame.frame, frame.boxes]));
+      return route.fulfill({ json: { revision: settings.revision, analysis_id: 'browser-test', data: { summary: { total_sperm: 2 } }, video_url: '/outputs/revised.webm', heatmap_url: null } });
+    }
+    return route.abort();
+  });
+  await page.route('**/__editor-test', (route) => route.fulfill({ contentType: 'text/html', body: `<!doctype html><html><head><meta name="viewport" content="width=device-width, initial-scale=1"></head><body><main id="root" style="max-width:900px;margin:auto;padding:16px"></main><script type="module">
+    import RefreshRuntime from '/@react-refresh';
+    RefreshRuntime.injectIntoGlobalHook(window);
+    window.$RefreshReg$ = () => {};
+    window.$RefreshSig$ = () => (type) => type;
+    window.__vite_plugin_react_preamble_installed__ = true;
+    const { default: React } = await import('/node_modules/.vite/deps/react.js');
+    const { default: ReactDOM } = await import('/node_modules/.vite/deps/react-dom_client.js');
+    const { default: DetectionEditor } = await import('/src/components/DetectionEditor.jsx');
+    await import('/src/index.css');
+    ReactDOM.createRoot(document.getElementById('root')).render(React.createElement(DetectionEditor, { analysisId: 'browser-test', onSave: (result) => { window.savedResult = result; }, onPendingChange: (value) => { window.pending = value; } }));
+  </script></body></html>` }));
+  await page.goto('http://127.0.0.1:5198/__editor-test');
+  await page.getByRole('button', { name: 'Koreksi kotak deteksi', exact: true }).click();
+  const firstBox = page.getByRole('button', { name: 'Kotak det-0, sperm, lintasan 1' });
+  await firstBox.click();
+  await page.getByRole('button', { name: 'Hapus kotak', exact: true }).click();
+  assert.equal(await page.locator('.editor-stage rect[role="button"]').count(), 0);
+  await page.getByRole('button', { name: 'Undo', exact: true }).click();
+  await firstBox.waitFor();
+  await page.getByRole('button', { name: 'Redo', exact: true }).click();
+  assert.equal(await page.locator('.editor-stage rect[role="button"]').count(), 0);
+  await page.getByRole('button', { name: 'Undo', exact: true }).click();
+  await firstBox.waitFor();
+  const initial = await firstBox.boundingBox();
+  await page.mouse.move(initial.x + initial.width / 2, initial.y + initial.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(initial.x + initial.width / 2 + 20, initial.y + initial.height / 2 + 10, { steps: 4 });
+  await page.mouse.up();
+  assert.ok(Number(await firstBox.getAttribute('x')) > 100);
+  const handles = page.locator('.editor-stage g').first().locator('rect:not([role])');
+  const handle = await handles.last().boundingBox();
+  await page.mouse.move(handle.x + handle.width / 2, handle.y + handle.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(handle.x + handle.width / 2 + 18, handle.y + handle.height / 2 + 18, { steps: 4 });
+  await page.mouse.up();
+  assert.ok(Number(await firstBox.getAttribute('width')) > 80);
+  await page.getByRole('button', { name: 'Tambah kotak', exact: true }).click();
+  const stage = await page.locator('.editor-stage svg').boundingBox();
+  await page.mouse.move(stage.x + stage.width * .5, stage.y + stage.height * .4);
+  await page.mouse.down();
+  await page.mouse.move(stage.x + stage.width * .6, stage.y + stage.height * .5, { steps: 4 });
+  await page.mouse.up();
+  assert.equal(await page.locator('.editor-stage rect[role="button"]').count(), 2);
+  await page.getByLabel('Label', { exact: true }).selectOption('excluded');
+  await page.getByLabel('ID lintasan (opsional)', { exact: true }).fill('8');
+  await page.getByRole('button', { name: 'Tetapkan ID', exact: true }).click();
+  await page.getByLabel('Bandingkan kotak AI asli').check();
+  assert.equal(await page.locator('.editor-stage rect[role="button"]').count(), 1);
+  await page.getByLabel('Bandingkan kotak AI asli').uncheck();
+  await page.getByRole('button', { name: 'Berikutnya', exact: true }).click();
+  await page.locator('.editor-stage svg[aria-label^="Frame 2,"]').waitFor();
+  assert.equal(await page.locator('.editor-stage rect[role="button"]').count(), 1);
+  await page.getByRole('button', { name: 'Sebelumnya', exact: true }).click();
+  await page.locator('.editor-stage svg[aria-label^="Frame 1,"]').waitFor();
+  assert.equal(await page.locator('.editor-stage rect[role="button"]').count(), 2);
+  await page.getByLabel('Alasan koreksi', { exact: true }).fill('Uji editor: kotak diperbaiki dan debris dikecualikan');
+  await page.getByRole('button', { name: 'Simpan koreksi & hitung ulang', exact: true }).click();
+  await page.waitForFunction(() => window.savedResult?.revision === 1 && window.pending === false);
+  assert.equal(savedPayload.frames.length, 1);
+  assert.equal(savedPayload.frames[0].frame, 0);
+  assert.equal(savedPayload.frames[0].boxes[1].label, 'excluded');
+  assert.equal(savedPayload.frames[0].boxes[1].track_id, 8);
+  assert.equal(savedPayload.frames[0].boxes[1].confidence, undefined);
+  const output = path.join(root, '.tmp', 'correction-smoke');
+  await fs.mkdir(output, { recursive: true });
+  await page.screenshot({ path: path.join(output, 'editor-desktop.png'), fullPage: true });
+  await page.setViewportSize({ width: 390, height: 844 });
+  assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true);
+  await page.screenshot({ path: path.join(output, 'editor-mobile.png'), fullPage: true });
+  assert.deepEqual(errors, []);
+  console.log('EDITOR_BROWSER_OK: select, move, resize, add, delete, labels, undo/redo, frame navigation, comparison, save, mobile layout');
+} finally {
+  await browser?.close();
+  await server.close();
+}

@@ -4,6 +4,8 @@ import axios from 'axios';
 import { API_BASE_URL } from '../api.js';
 import {
   LayoutGrid,
+  LayoutDashboard,
+  History,
   ClipboardList,
   ScanEye,
   Microscope,
@@ -11,7 +13,6 @@ import {
   ShieldCheck,
   FileText,
   Sliders,
-  HelpCircle,
   LogOut,
   Sun,
   Moon,
@@ -19,7 +20,6 @@ import {
   CheckCircle2,
   AlertCircle,
   UploadCloud,
-  X,
   RefreshCw,
   Cpu,
   Sparkles,
@@ -27,28 +27,50 @@ import {
   UserCheck,
   Check,
   Stethoscope,
-  ArrowLeft,
   Home,
   PanelLeftClose,
   PanelLeftOpen,
+  ListOrdered,
+  QrCode,
+  KeyRound,
 } from 'lucide-react';
-import { ROLES, getRoleMode, hasPermission, logout } from '../auth';
+import { ROLES, getRoleMode, hasPermission, logout, getAuthHeader } from '../auth';
 import { createAnalysisRecord, formatMeasurement } from '../analysisRecords';
 import { useCalibration, getErrorMessage, formatMotility } from '../calibration';
 import { CalibrationFields, ConfidenceField, CalibrationSummary, MotionAvailability, AnalysisInterpretation, KinematicsMetrics } from './CalibrationControls';
 import ParameterHelp from './ParameterHelp';
+import DetectionEditor from './DetectionEditor';
 import BrandLogos from './BrandLogos';
-import { AnalysisRecords, DashboardOverview, EmptyData } from './DashboardDataViews';
+import RegistrationPanel from './RegistrationPanel';
+import SampleQueuePanel, { LinkedSampleSelect } from './SampleQueuePanel';
+import ReviewPanel from './ReviewPanel';
+import { ReleaseReportsPanel, MyReportsPanel, PhysicianReportHistoryPanel, AdminReportHistoryPanel } from './ReportsPanel';
+import { UsersPanel, AuditPanel } from './AdminPanels';
+import OpsDashboardPanel from './OpsDashboardPanel';
+import PatientQueuePanel from './PatientQueuePanel';
+import ChangePasswordPanel from './ChangePasswordPanel';
+import { TodaySchedule, QueuePanel, SamplesPanel } from './FrontOfficeViews';
+import PatientListPanel from './PatientListPanel';
+import FrontOfficeScanner from './FrontOfficeScanner';
+import { AnalysisRecords, DashboardOverview } from './DashboardDataViews';
 
 // Metadata menu; daftar menu yang tampil per peran ada di ROLES[peran].tabs (auth.js)
 const TAB_META = {
-  'Registration': { label: 'Registrasi & Sampel', icon: ClipboardList },
+  'Dashboard': { label: 'Dashboard', icon: LayoutDashboard },
+  'Report History': { label: 'Riwayat Laporan', icon: History },
+  'Registration': { label: 'Registrasi Pasien', icon: ClipboardList },
+  'Queue': { label: 'List Pasien', icon: Users },
+  'Samples': { label: 'Pemeriksaan & Sampel', icon: ClipboardList },
+  'Scan QR': { label: 'Scan QR', icon: QrCode },
   'Overview': { label: 'Ringkasan', icon: LayoutGrid },
+  'Incoming Samples': { label: 'Sampel Masuk', icon: Microscope },
   'Analysis Lab': { label: 'Analisis Sampel', icon: ScanEye },
   'Perlu Validasi': { label: 'Tinjau Hasil', icon: Stethoscope },
   'Patient Records': { label: 'Hasil Analisis', icon: Users },
   'Lab Reports': { label: 'Laporan & Tanda Tangan', icon: FileText },
+  'My Queue': { label: 'Antrean Saya', icon: ListOrdered },
   'My Reports': { label: 'Laporan Saya', icon: FileText },
+  'Account Settings': { label: 'Ubah Kata Sandi', icon: KeyRound },
   'Quality Control': { label: 'Standar WHO 6th', icon: ShieldCheck },
   'Calibration': { label: 'Preset Kalibrasi', icon: Sliders },
   'User Management': { label: 'Pengguna & Peran', icon: UserCheck },
@@ -90,7 +112,13 @@ export default function AdminDashboard({ onSwitchToPublic }) {
 
   // Navigation & Theme
   const [activeTab, setActiveTab] = useState(() => roleTabs[0]);
-  const [isDarkMode, setIsDarkMode] = useState(false);
+  const [isDarkMode, setIsDarkMode] = useState(() => {
+    try {
+      return window.localStorage.getItem('casa_ai_dark_mode') === 'true';
+    } catch {
+      return false;
+    }
+  });
   // Sidebar bisa dibuka (ikon + nama menu) atau diciutkan (ikon saja); pilihan diingat per browser
   const [dockExpanded, setDockExpanded] = useState(() => {
     try {
@@ -111,6 +139,10 @@ export default function AdminDashboard({ onSwitchToPublic }) {
   };
 
   const navigateTo = (tabId) => {
+    if (correctionPending) {
+      setAnalysisError('Simpan atau buang perubahan koreksi sebelum pindah halaman.');
+      return;
+    }
     if (roleTabs.includes(tabId)) setActiveTab(tabId);
   };
 
@@ -130,7 +162,6 @@ export default function AdminDashboard({ onSwitchToPublic }) {
   const [calibSaved, setCalibSaved] = useState(false);
 
   // Modals
-  const [showGuidelinesModal, setShowGuidelinesModal] = useState(false);
 
   const [confThres, setConfThres] = useState(0.25);
   const calibrationControls = useCalibration();
@@ -149,12 +180,16 @@ export default function AdminDashboard({ onSwitchToPublic }) {
 
   // File Upload & AI Execution state
   const [uploadFile, setUploadFile] = useState(null);
+  const [linkedExamId, setLinkedExamId] = useState(null);
   const [isImageUpload, setIsImageUpload] = useState(false);
   const [analysisLoading, setAnalysisLoading] = useState(false);
   const [progressStatus, setProgressStatus] = useState({ stage: 'idle', percent: 0, msg: '' });
   const [analysisResult, setAnalysisResult] = useState(null);
   const [analysisError, setAnalysisError] = useState(null);
   const [activeResultTab, setActiveResultTab] = useState('annotated');
+  const [correctionPending, setCorrectionPending] = useState(false);
+  const [previewFailed, setPreviewFailed] = useState(false);
+  const previewRef = useRef(null);
 
   const fileInputRef = useRef(null);
 
@@ -165,12 +200,22 @@ export default function AdminDashboard({ onSwitchToPublic }) {
     } else {
       document.documentElement.removeAttribute('data-theme');
     }
+    // Save preference to localStorage
+    try {
+      window.localStorage.setItem('casa_ai_dark_mode', String(isDarkMode));
+    } catch {
+      // Ignore localStorage errors
+    }
   }, [isDarkMode]);
 
   const handleFileDrop = (e) => {
     e.preventDefault();
     const file = e.dataTransfer ? e.dataTransfer.files[0] : e.target.files[0];
     if (file) {
+      if (correctionPending) {
+        setAnalysisError('Simpan atau buang koreksi sebelum mengganti file.');
+        return;
+      }
       setUploadFile(file);
       setIsImageUpload(file.type.startsWith('image/'));
       setAnalysisResult(null);
@@ -179,8 +224,17 @@ export default function AdminDashboard({ onSwitchToPublic }) {
   };
 
   const handleExecuteAnalysis = async () => {
+    if (correctionPending) {
+      setAnalysisError('Simpan atau buang koreksi sebelum menjalankan analisis baru.');
+      return;
+    }
     if (!uploadFile) {
       setAnalysisError('Silakan pilih atau jatuhkan file video mikroskopik terlebih dahulu.');
+      return;
+    }
+
+    if (isImageUpload && linkedExamId) {
+      setAnalysisError('Analisis citra belum bisa dikaitkan ke sampel. Pilih video, atau kosongkan pilihan sampel.');
       return;
     }
 
@@ -201,15 +255,18 @@ export default function AdminDashboard({ onSwitchToPublic }) {
       formData.append('image', uploadFile);
     } else {
       formData.append('video', uploadFile);
+      if (linkedExamId) formData.append('examination_id', String(linkedExamId));
     }
 
     try {
       if (isImageUpload) {
         setProgressStatus({ stage: 'processing', percent: 60, msg: 'Menganalisis gambar sperma dengan YOLOv11...' });
         const res = await axios.post(endpoint, formData, {
-          headers: { 'Content-Type': 'multipart/form-data' }
+          headers: { 'Content-Type': 'multipart/form-data', ...getAuthHeader() }
         });
         setAnalysisResult({
+          analysis_id: res.data.analysis_id,
+          revision: res.data.revision,
           data: res.data.data,
           video_url: `${API_BASE_URL}${res.data.video_url}`,
           heatmap_url: null,
@@ -218,7 +275,7 @@ export default function AdminDashboard({ onSwitchToPublic }) {
         setProgressStatus({ stage: 'completed', percent: 100, msg: 'Analisis selesai!' });
       } else {
         const submitRes = await axios.post(endpoint, formData, {
-          headers: { 'Content-Type': 'multipart/form-data' }
+          headers: { 'Content-Type': 'multipart/form-data', ...getAuthHeader() }
         });
 
         const { task_id } = submitRes.data;
@@ -227,13 +284,15 @@ export default function AdminDashboard({ onSwitchToPublic }) {
         let polling = true;
         while (polling) {
           await new Promise((r) => setTimeout(r, 1800));
-          const progRes = await axios.get(`${API_BASE_URL}/api/progress/${task_id}`);
+          const progRes = await axios.get(`${API_BASE_URL}/api/progress/${task_id}`, { headers: getAuthHeader() });
 
           if (progRes.data.status === 'completed') {
             polling = false;
             const finalRes = progRes.data.result;
             if (finalRes.success) {
               setAnalysisResult({
+                analysis_id: finalRes.analysis_id,
+                revision: finalRes.revision,
                 data: finalRes.data,
                 video_url: `${API_BASE_URL}${finalRes.video_url}`,
                 heatmap_url: `${API_BASE_URL}${finalRes.heatmap_url}`,
@@ -263,14 +322,31 @@ export default function AdminDashboard({ onSwitchToPublic }) {
     }
   };
 
-  const handleSaveAnalysisToRecords = () => {
+  const handleSendToDoctor = async () => {
+    if (correctionPending) {
+      setAnalysisError('Hitung ulang atau buang koreksi sebelum menggunakan hasil.');
+      return;
+    }
+    if (!linkedExamId) {
+      setAnalysisError('Kaitkan hasil ke sampel terlebih dahulu (pilih sampel di "Kaitkan hasil ke sampel") agar bisa dikirim ke dokter.');
+      return;
+    }
+    try {
+      await axios.post(`${API_BASE_URL}/api/analysis/${analysisResult.analysis_id}/attach`, { examination_id: linkedExamId }, { headers: getAuthHeader() });
+      await axios.post(`${API_BASE_URL}/api/examinations/${linkedExamId}/submit`, null, { headers: getAuthHeader() });
+    } catch (error) {
+      setAnalysisError(getErrorMessage(error));
+      return;
+    }
     try {
       const record = createAnalysisRecord(analysisResult, { sourceFile: uploadFile?.name });
       setRecords((prev) => [record, ...prev]);
-      navigateTo('Patient Records');
-    } catch (error) {
-      setAnalysisError(error.message);
+    } catch {
+      // catatan lokal hanya untuk tampilan; status di server sudah dikirim
     }
+    setAnalysisError(null);
+    setLinkedExamId(null);
+    navigateTo('Patient Records');
   };
 
   if (!currentRoleObj) return null;
@@ -348,16 +424,6 @@ export default function AdminDashboard({ onSwitchToPublic }) {
 
             <button
               className="dock-btn"
-              title="Panduan Standar WHO 6th"
-              data-tooltip="Panduan Standar WHO"
-              onClick={() => setShowGuidelinesModal(true)}
-            >
-              <HelpCircle size={19} />
-              <span className="dock-btn-label">Panduan WHO</span>
-            </button>
-
-            <button
-              className="dock-btn"
               title="Keluar / Logout Akun"
               data-tooltip="Keluar Akun"
               onClick={handleLogout}
@@ -372,87 +438,6 @@ export default function AdminDashboard({ onSwitchToPublic }) {
 
       {/* ─── 2. Main Dashboard Surface ─── */}
       <main className="dashboard-surface">
-        {/* Top Navbar */}
-        <header className="top-navbar">
-          {/* Brand Logo */}
-          <div className="brand-group">
-            <div className="brand-text">
-              <h1>
-                CASA<span style={{ color: 'var(--teal)' }}>-AI</span>
-                <span className="badge-pro">Portal Medis</span>
-              </h1>
-              <p>Computer Assisted Sperm Analysis</p>
-            </div>
-          </div>
-
-          {/* Center Capsule Tabs Tailored per Role */}
-          <nav className="center-nav-pill">
-            {roleTabs.map((tabId) => {
-              const { label, icon: TabIcon } = TAB_META[tabId];
-              return (
-                <button
-                  key={tabId}
-                  className={`nav-tab-btn ${activeTab === tabId ? 'active' : ''}`}
-                  onClick={() => navigateTo(tabId)}
-                  style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
-                >
-                  <TabIcon size={14} flexShrink={0} />
-                  <span>{label}</span>
-                </button>
-              );
-            })}
-          </nav>
-
-          {/* Right Action Icons & Role Switcher */}
-          <div className="right-actions">
-            {/* Quick Home / Public Portal Button */}
-            <button
-              className="action-pill-btn secondary"
-              style={{ padding: '5px 10px', fontSize: '0.74rem', display: 'flex', alignItems: 'center', gap: '5px', whiteSpace: 'nowrap' }}
-              onClick={handleGoHome}
-              title="Kembali ke Beranda Utama (/)"
-            >
-              <ArrowLeft size={13} color="var(--teal)" />
-              <span>Beranda</span>
-            </button>
-
-            {/* Role & Doctor Profile Pill */}
-            <div
-              className="doctor-profile-pill"
-              title={`Peran saat ini: ${currentRoleObj.name}. Keluar untuk berganti peran.`}
-            >
-              <div className="doctor-info">
-                <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-                  <span className="doctor-name">Peran</span>
-                  <span
-                    className="badge-pro"
-                    style={{
-                      background: currentRoleObj.badgeColor,
-                      color: currentRoleObj.badgeTextColor || '#FFFFFF',
-                      fontSize: '0.58rem',
-                      padding: '1px 5px',
-                      flexShrink: 0
-                    }}
-                  >
-                    {currentRoleObj.badge}
-                  </span>
-                </div>
-                <span className="doctor-role" title={currentRoleObj.name}>{currentRoleObj.name}</span>
-              </div>
-            </div>
-
-            {/* Quick Logout Button */}
-            <button
-              className="icon-action-btn"
-              title="Keluar / Logout Akun"
-              onClick={handleLogout}
-              style={{ color: '#EF4444' }}
-            >
-              <LogOut size={16} />
-            </button>
-          </div>
-        </header>
-
         {/* Hero Greeting Section */}
         <section className="hero-greeting">
           <div className="greeting-text">
@@ -474,38 +459,39 @@ export default function AdminDashboard({ onSwitchToPublic }) {
         </p>
 
         {/* ─── FRONT OFFICE: REGISTRASI PASIEN & SERAH TERIMA SAMPEL ─── */}
-        {roleTabs.includes(activeTab) && activeTab === 'Registration' && (
-          <EmptyData title="Registrasi pasien belum tersedia">
-            Pendaftaran pasien/pemeriksaan, serah terima sampel, dan cetak label/kode batang memerlukan database pasien di server, yang belum tersedia.
-          </EmptyData>
-        )}
+        {roleTabs.includes(activeTab) && activeTab === 'Registration' && <RegistrationPanel />}
+        {roleTabs.includes(activeTab) && activeTab === 'Queue' && <PatientListPanel />}
+        {roleTabs.includes(activeTab) && activeTab === 'Samples' && <SamplesPanel />}
+        {roleTabs.includes(activeTab) && activeTab === 'Scan QR' && <FrontOfficeScanner />}
 
         {/* ─── PASIEN: LAPORAN MILIK SENDIRI ─── */}
-        {roleTabs.includes(activeTab) && activeTab === 'My Reports' && (
-          <EmptyData title="Belum ada laporan yang dirilis">
-            Laporan yang telah dirilis dokter akan tampil di sini. Portal pasien memerlukan akun dan database laporan di server, yang belum tersedia.
-          </EmptyData>
-        )}
+        {roleTabs.includes(activeTab) && activeTab === 'My Queue' && <PatientQueuePanel />}
+        {roleTabs.includes(activeTab) && activeTab === 'My Reports' && <MyReportsPanel />}
+        {roleTabs.includes(activeTab) && activeTab === 'Account Settings' && <ChangePasswordPanel />}
 
         {/* ─── 1. DEDICATED VIEW: OVERVIEW / DASHBOARD ─── */}
         {roleTabs.includes(activeTab) && activeTab === 'Overview' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-            <DashboardOverview
-              records={records}
-              onAnalyze={can('runAnalysis') ? () => navigateTo('Analysis Lab') : undefined}
-            />
-            <AnalysisRecords records={records} title="Hasil analisis terbaru" />
+            {currentRole === 'frontoffice' && <QueuePanel />}
+            {(currentRole === 'frontoffice' || currentRole === 'analis') && <TodaySchedule />}
+            {currentRole !== 'frontoffice' && (
+              <>
+                <DashboardOverview
+                  records={records}
+                  onAnalyze={can('runAnalysis') ? () => navigateTo('Analysis Lab') : undefined}
+                />
+                <AnalysisRecords records={records} title="Hasil analisis terbaru" />
+              </>
+            )}
           </div>
         )}
 
         {/* ─── 2. DEDICATED VIEW: DOKTER - ANTREAN VALIDASI KLINIS ─── */}
-        {roleTabs.includes(activeTab) && activeTab === 'Perlu Validasi' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-            <EmptyData title="Tanda tangan digital belum tersedia">
-              Interpretasi klinis, tanda tangan digital, pengembalian kasus, dan rilis laporan memerlukan autentikasi akun serta database di server.
-            </EmptyData>
-            <AnalysisRecords records={records} title="Hasil yang dikirim analis" />
-          </div>
+        {roleTabs.includes(activeTab) && activeTab === 'Perlu Validasi' && <ReviewPanel />}
+
+        {/* ─── ANALIS: ANTREAN SAMPEL MASUK ─── */}
+        {roleTabs.includes(activeTab) && activeTab === 'Incoming Samples' && (
+          <SampleQueuePanel locked={correctionPending} onAnalyze={(item) => { setLinkedExamId(item.id); navigateTo('Analysis Lab'); }} />
         )}
 
         {/* ─── 3. DEDICATED VIEW: LABORATORIUM ANALISIS SEMEN (AI) ─── */}
@@ -572,6 +558,10 @@ export default function AdminDashboard({ onSwitchToPublic }) {
                   )}
                 </div>
 
+                {currentRole === 'analis' && (
+                  <LinkedSampleSelect value={linkedExamId} onChange={setLinkedExamId} disabled={analysisLoading} />
+                )}
+
                 <h4 style={{ fontSize: '0.94rem', fontWeight: 700, marginBottom: '12px', borderTop: '1px solid var(--border-subtle)', paddingTop: '12px' }}>
                   2. Konfigurasi Parameter Analisis
                 </h4>
@@ -631,23 +621,41 @@ export default function AdminDashboard({ onSwitchToPublic }) {
                           Inferensi selesai • {analysisResult.data?.summary?.total_sperm ?? 'N/A'} {analysisResult.data?.summary?.count_method === 'median_detections_per_frame' ? 'median deteksi per frame' : 'deteksi'} • Kedalaman {analysisResult.data?.calibration?.chamber_depth ?? 'N/A'} µm
                         </span>
                       </div>
-                      <div className="center-nav-pill" style={{ padding: '2px' }}>
-                        <button
-                          className={`nav-tab-btn ${activeResultTab === 'annotated' ? 'active' : ''}`}
-                          style={{ padding: '4px 10px', fontSize: '0.72rem' }}
-                          onClick={() => setActiveResultTab('annotated')}
-                        >
-                          Media Pelacakan
+                      <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                        <button className="action-pill-btn primary" style={{ fontSize: '0.75rem', height: '28px', padding: '0 12px' }} onClick={() => {
+                          // Find dan click DetectionEditor button
+                          setTimeout(() => {
+                            const detectionEditorBtn = document.querySelector('[aria-label*="Koreksi kotak"] button, .detection-editor-toggle');
+                            if (!detectionEditorBtn) {
+                              // Fallback: find by text content
+                              const allButtons = Array.from(document.querySelectorAll('button'));
+                              const btn = allButtons.find(b => b.textContent?.includes('Koreksi kotak deteksi'));
+                              btn?.click();
+                            } else {
+                              detectionEditorBtn.click();
+                            }
+                          }, 0);
+                        }}>
+                          ✏️ Koreksi Deteksi
                         </button>
-                        {analysisResult.heatmap_url && (
+                        <div className="center-nav-pill" style={{ padding: '2px' }}>
                           <button
-                            className={`nav-tab-btn ${activeResultTab === 'heatmap' ? 'active' : ''}`}
+                            className={`nav-tab-btn ${activeResultTab === 'annotated' ? 'active' : ''}`}
                             style={{ padding: '4px 10px', fontSize: '0.72rem' }}
-                            onClick={() => setActiveResultTab('heatmap')}
+                            onClick={() => setActiveResultTab('annotated')}
                           >
-                            Peta Panas (Heatmap)
+                            Media Pelacakan
                           </button>
-                        )}
+                          {analysisResult.heatmap_url && (
+                            <button
+                              className={`nav-tab-btn ${activeResultTab === 'heatmap' ? 'active' : ''}`}
+                              style={{ padding: '4px 10px', fontSize: '0.72rem' }}
+                              onClick={() => setActiveResultTab('heatmap')}
+                            >
+                              Peta Panas (Heatmap)
+                            </button>
+                          )}
+                        </div>
                       </div>
                     </div>
 
@@ -655,7 +663,10 @@ export default function AdminDashboard({ onSwitchToPublic }) {
                     {analysisResult.video_url ? (
                       <div style={{ borderRadius: 'var(--radius-md)', overflow: 'hidden', background: '#000', marginBottom: '16px' }}>
                         {activeResultTab === 'annotated' ? (
-                          <>{analysisResult.isImage ? <img src={analysisResult.video_url} alt="Hasil deteksi citra" style={{ width: '100%', maxHeight: '280px', objectFit: 'contain' }} /> : (<video src={analysisResult.video_url} controls autoPlay loop style={{ width: '100%', maxHeight: '280px', display: 'block' }} />)}</>
+                          <>{analysisResult.isImage ? <img src={analysisResult.video_url} alt="Hasil deteksi citra" style={{ width: '100%', maxHeight: '280px', objectFit: 'contain' }} /> : (<>
+                            <video key={`${analysisResult.analysis_id}-${analysisResult.revision ?? 0}`} ref={previewRef} src={analysisResult.video_url} controls onError={() => setPreviewFailed(true)} onLoadedData={() => setPreviewFailed(false)} style={{ width: '100%', maxHeight: '280px', display: 'block' }} />
+                            {previewFailed && <p role="alert" style={{ padding: '8px 12px', fontSize: '0.75rem', color: '#FCA5A5' }}>Preview hasil tidak dapat dimuat. Coba muat ulang halaman atau simpan koreksi lagi.</p>}
+                          </>)}</>
                         ) : (
                           <img src={analysisResult.heatmap_url} alt="Heatmap" style={{ width: '100%', maxHeight: '280px', objectFit: 'contain' }} />
                         )}
@@ -666,6 +677,21 @@ export default function AdminDashboard({ onSwitchToPublic }) {
                       </div>
                     )}
 
+                    {analysisResult.analysis_id ? (
+                      <DetectionEditor
+                        key={analysisResult.analysis_id}
+                        analysisId={analysisResult.analysis_id}
+                        onPendingChange={setCorrectionPending}
+                        onOpen={() => previewRef.current?.pause()}
+                        onSave={(result) => {
+                          setPreviewFailed(false);
+                          setAnalysisResult((previous) => ({ ...previous, ...result, video_url: `${API_BASE_URL}${result.video_url}`, heatmap_url: result.heatmap_url ? `${API_BASE_URL}${result.heatmap_url}` : null }));
+                          setActiveResultTab('annotated');
+                          setAnalysisError(null);
+                        }}
+                      />
+                    ) : <p>Hasil lama belum menyimpan kotak yang bisa diedit. Jalankan analisis ulang untuk menggunakan koreksi.</p>}
+                    {correctionPending && <p role="status">Ada koreksi belum diterapkan. Simpan dan hitung ulang sebelum menggunakan hasil ini.</p>}
                     <CalibrationSummary data={analysisResult.data} />
                     {/* Motility Subsets Breakdown */}
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '10px', marginBottom: '16px' }}>
@@ -703,14 +729,15 @@ export default function AdminDashboard({ onSwitchToPublic }) {
                     <MotionAvailability data={analysisResult.data} />
 
                     {/* Save to records action */}
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--teal-subtle)', padding: '14px 18px', borderRadius: 'var(--radius-md)', border: '1px solid var(--teal-light)' }}>
-                      <AnalysisInterpretation data={analysisResult.data} />
-                      <button
-                        className="action-pill-btn primary"
-                        style={{ background: 'var(--teal)', whiteSpace: 'nowrap' }}
-                        onClick={handleSaveAnalysisToRecords}
-                      >
-                        <CheckCircle2 size={15} />
+                      <div className="analysis-review-action">
+                        <AnalysisInterpretation data={analysisResult.data} />
+                        <button
+                          type="button"
+                          className="action-pill-btn primary analysis-review-submit"
+                          disabled={correctionPending}
+                          onClick={handleSendToDoctor}
+                        >
+                          <CheckCircle2 size={20} />
                         <span>Kirim untuk Ditinjau Dokter →</span>
                       </button>
                     </div>
@@ -723,7 +750,9 @@ export default function AdminDashboard({ onSwitchToPublic }) {
 
         {/* ─── 4. DEDICATED VIEW: MASTER PATIENT RECORDS DATABASE ─── */}
         {roleTabs.includes(activeTab) && activeTab === 'Patient Records' && (
-          <AnalysisRecords records={records} title="Rekam hasil analisis sesi ini" />
+          <>
+            <AnalysisRecords records={records} title="Rekam hasil analisis sesi ini" />
+          </>
         )}
 
         {/* ─── 5. DEDICATED VIEW: STANDAR WHO 6th & KENDALI MUTU (QC) ─── */}
@@ -905,14 +934,7 @@ export default function AdminDashboard({ onSwitchToPublic }) {
         )}
 
         {/* ─── 6. DEDICATED VIEW: DOKTER & ADMIN - LAPORAN HASIL LAB & SERTIFIKASI ─── */}
-        {roleTabs.includes(activeTab) && activeTab === 'Lab Reports' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-            <EmptyData title="Laporan resmi belum tersedia">
-              Penerbitan laporan bertanda tangan memerlukan validasi dokter dan database pasien di server. Hasil analisis sesi ini dapat diunduh sebagai JSON di bawah.
-            </EmptyData>
-            <AnalysisRecords records={records} title="Hasil analisis untuk laporan" />
-          </div>
-        )}
+        {roleTabs.includes(activeTab) && activeTab === 'Lab Reports' && <ReleaseReportsPanel />}
 
         {/* ─── 7. DEDICATED VIEW: LABORAN & ADMIN - KALIBRASI HARDWARE & BILIK ─── */}
         {roleTabs.includes(activeTab) && activeTab === 'Calibration' && (
@@ -1020,80 +1042,16 @@ export default function AdminDashboard({ onSwitchToPublic }) {
         )}
 
         {/* ─── 8. DEDICATED VIEW: ADMIN - USER & STAFF MANAGEMENT ─── */}
-        {roleTabs.includes(activeTab) && activeTab === 'User Management' && (
-          <EmptyData title="Belum ada data pengguna">
-            Manajemen akun staf memerlukan layanan autentikasi di server, yang belum tersedia.
-          </EmptyData>
+        {roleTabs.includes(activeTab) && activeTab === 'Dashboard' && <OpsDashboardPanel />}
+        {roleTabs.includes(activeTab) && activeTab === 'Report History' && (
+          currentRoleObj.id === 'superadmin' ? <AdminReportHistoryPanel /> : <PhysicianReportHistoryPanel />
         )}
+        {roleTabs.includes(activeTab) && activeTab === 'User Management' && <UsersPanel />}
 
         {/* ─── 9. DEDICATED VIEW: ADMIN - SERVER GPU CUDA & AUDIT LOGS ─── */}
-        {roleTabs.includes(activeTab) && activeTab === 'Server Logs' && (
-          <EmptyData title="Telemetri server belum terhubung">
-            Backend belum menyediakan endpoint telemetri GPU maupun log audit, sehingga tidak ada data yang dapat ditampilkan.
-          </EmptyData>
-        )}
+        {roleTabs.includes(activeTab) && activeTab === 'Server Logs' && <AuditPanel />}
       </main>
 
-      {/* ─── MODAL 4: WHO 6th Edition Guidelines Reference ─── */}
-      {showGuidelinesModal && (
-        <div className="modal-backdrop" onClick={() => setShowGuidelinesModal(false)}>
-          <div className="modal-content-panel" style={{ maxWidth: '640px' }} onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header">
-              <h3>
-                <ShieldCheck size={22} color="var(--teal)" />
-                Nilai Rujukan Standar WHO Manual ke-6 (2021)
-              </h3>
-              <button className="modal-close-btn" onClick={() => setShowGuidelinesModal(false)}>
-                <X size={18} />
-              </button>
-            </div>
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', fontSize: '0.86rem', color: 'var(--text-secondary)' }}>
-              <p>
-                Sistem CASA-AI menggunakan parameter acuan resmi dari <em>WHO Laboratory Manual for the Examination and Processing of Human Semen (6th Edition)</em> untuk interpretasi klinis:
-              </p>
-
-              <div className="subset-tile" style={{ textAlign: 'left', padding: '14px' }}>
-                <strong style={{ color: 'var(--teal)', display: 'block', marginBottom: '4px' }}>
-                  1. Konsentrasi Sperma (Sperm Concentration)
-                </strong>
-                <span>Batas rujukan normal: <strong>≥ 15 Juta / mL</strong> (atau ≥ 39 Juta per ejakulat).</span>
-              </div>
-
-              <div className="subset-tile" style={{ textAlign: 'left', padding: '14px' }}>
-                <strong style={{ color: 'var(--teal)', display: 'block', marginBottom: '4px' }}>
-                  2. Motilitas Total (PR + NP)
-                </strong>
-                <span>Batas rujukan normal: <strong>≥ 42%</strong> dari total sel sperma harus motil.</span>
-              </div>
-
-              <div className="subset-tile" style={{ textAlign: 'left', padding: '14px' }}>
-                <strong style={{ color: 'var(--lime-dark)', display: 'block', marginBottom: '4px' }}>
-                  3. Motilitas Progresif (PR)
-                </strong>
-                <span>Batas rujukan normal: <strong>≥ 30%</strong> (sperma bergerak aktif maju lurus atau dalam lingkaran besar).</span>
-              </div>
-
-              <div className="subset-tile" style={{ textAlign: 'left', padding: '14px' }}>
-                <strong style={{ color: 'var(--text-primary)', display: 'block', marginBottom: '4px' }}>
-                  4. Kategori Diagnostik Klinis
-                </strong>
-                <ul style={{ paddingLeft: '20px', marginTop: '6px', lineHeight: 1.6 }}>
-                  <li><strong>Normozoospermia</strong>: Seluruh parameter (konsentrasi, motilitas, morfologi) memenuhi batas normal.</li>
-                  <li><strong>Asthenozoospermia</strong>: Motilitas progresif &lt; 30% atau total motilitas &lt; 42%.</li>
-                  <li><strong>Oligozoospermia</strong>: Konsentrasi sperma &lt; 15 juta/mL.</li>
-                </ul>
-              </div>
-            </div>
-
-            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '20px' }}>
-              <button className="action-pill-btn primary" onClick={() => setShowGuidelinesModal(false)}>
-                Saya Mengerti
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

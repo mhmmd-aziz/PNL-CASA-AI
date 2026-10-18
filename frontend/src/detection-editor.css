@@ -1,0 +1,21 @@
+.detection-editor { margin: 16px 0; min-width: 0; }
+.detection-editor-body { margin-top: 12px; padding: 16px; border: 1px solid var(--border); border-radius: 14px; display: grid; gap: 14px; min-width: 0; }
+.detection-editor-body p { font-size: 0.8rem; line-height: 1.6; margin: 0; }
+.editor-warning { background: var(--teal-subtle); border-left: 3px solid var(--teal); padding: 12px; }
+.editor-toolbar, .editor-frame-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; min-width: 0; }
+.detection-editor-body button, .detection-editor-body input, .detection-editor-body select, .detection-editor-body textarea { font: inherit; font-size: 0.8rem; color: var(--text-primary); background: var(--bg-card-alt); border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; max-width: 100%; box-sizing: border-box; }
+.detection-editor-body button { min-height: 42px; cursor: pointer; white-space: normal; }
+.detection-editor-body button:disabled { opacity: 0.45; cursor: not-allowed; }
+.detection-editor-body button[aria-pressed='true'] { border-color: var(--teal); color: var(--teal); background: var(--teal-subtle); }
+.detection-editor-body :focus-visible { outline: 2px solid var(--teal); outline-offset: 2px; }
+.editor-toolbar label, .editor-reason { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 0.8rem; min-width: 0; max-width: 100%; }
+.editor-toolbar select { min-width: 0; max-width: 260px; }
+.editor-frame-controls input[type='number'], .editor-toolbar input[type='number'] { width: 100px; }
+.editor-frame-controls input[type='range'] { flex-basis: 100%; width: 100%; accent-color: var(--teal); }
+.editor-stage { overflow: auto; max-height: 65vh; background: #080b11; border: 1px solid var(--border); border-radius: 8px; min-width: 0; }
+.editor-stage svg { display: block; max-width: none; height: auto; touch-action: none; user-select: none; }
+.editor-stage rect { cursor: pointer; }
+.editor-reason { flex-direction: column; align-items: stretch; }
+.editor-reason textarea { width: 100%; min-height: 80px; resize: vertical; }
+.detection-editor-body .editor-save { flex: 1 1 260px; min-height: 48px; color: white; background: var(--teal); font-weight: 700; }
+.editor-error { color: #ef4444; overflow-wrap: anywhere; }

@@ -34,8 +34,14 @@ train model/dataset/
 backend/outputs/
 backend/uploads/
 backend/data/calibration.json
+backend/data/corrections/
 runs/
 train model/runs/
 
 *.CLAUDE.md 
 
+
+# Database lokal: file sementara SQLite dan backup berisi data pasien, jangan di-commit
+backend/database/*.db-wal
+backend/database/*.db-shm
+backend/database/*.backup-*.db

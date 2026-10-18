@@ -6,28 +6,37 @@ Extracts Unique ID, Bounding Box, Confidence, and Trajectory.
 
 import cv2
 import numpy as np
+from pathlib import Path
 from collections import defaultdict, deque
 from ultralytics import RTDETR, YOLO
 from utils.detection import sperm_class_ids
+from utils.annotations import frame_annotations, attach_tracks
 
 class SpermTracker:
     def __init__(self, model_path: str, conf_thres: float = 0.25):
         """
         Initialize the Tracker with a trained model.
+        Supports both YOLO and RT-DETR models.
         """
         # Try loading with YOLO first if 'yolo' is in the name, or just try both
+        model_type = None
         try:
-            if 'yolo' in model_path.lower() or 'best.pt' in model_path.lower(): # Assuming best.pt might be YOLO from the user's runs
+            if 'yolo' in model_path.lower() or 'best.pt' in model_path.lower():
                 self.model = YOLO(model_path)
+                model_type = "YOLO"
             else:
                 self.model = RTDETR(model_path)
+                model_type = "RT-DETR"
         except Exception:
             # Fallback
             try:
                 self.model = RTDETR(model_path)
+                model_type = "RT-DETR"
             except Exception:
                 self.model = YOLO(model_path)
-                
+                model_type = "YOLO"
+
+        print(f"✓ Loaded {model_type} model from {Path(model_path).name}")
         self.conf_thres = conf_thres
         self.sperm_class_ids = sperm_class_ids(self.model.names)
         
@@ -35,6 +44,8 @@ class SpermTracker:
         # Format: { track_id: [(center_x, center_y, frame_idx), ...] }
         self.trajectories = defaultdict(list)
         self._detection_counts = deque()
+        self._detection_boxes = deque()
+        self.frame_detections = []
         # Register before model.track() installs its callback, which replaces
         # detection boxes with the subset assigned a tracking ID.
         self.model.add_callback("on_predict_postprocess_end", self._capture_detection_counts)
@@ -47,6 +58,9 @@ class SpermTracker:
                 boxes.cls.cpu().numpy().astype(int), self.sperm_class_ids
             ).sum())
             self._detection_counts.append(count)
+            self._detection_boxes.append([] if boxes is None else frame_annotations(
+                boxes.xyxy.cpu().numpy(), boxes.cls.cpu().numpy(), boxes.conf.cpu().numpy(), self.sperm_class_ids
+            ))
         
     def process_video(self, video_path: str):
         """
@@ -55,6 +69,7 @@ class SpermTracker:
         """
         self.trajectories.clear()
         self._detection_counts.clear()
+        self._detection_boxes.clear()
         cap = cv2.VideoCapture(video_path)
         total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
         cap.release()
@@ -96,6 +111,7 @@ class SpermTracker:
             
             if not self._detection_counts:
                 raise RuntimeError("Hitungan deteksi sebelum tracking tidak tersedia.")
+            self.frame_detections = attach_tracks(self._detection_boxes.popleft(), frame_data)
             yield frame_idx, total_frames, r.plot(), frame_data, self._detection_counts.popleft()
             frame_idx += 1
             

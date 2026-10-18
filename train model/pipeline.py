@@ -16,6 +16,7 @@ from analysis.classifier import MotilityClassifier
 from analysis.calibration import CalibrationSettings
 from analysis.quality import select_motion_trajectories, MIN_TRACK_OBSERVATIONS
 from utils.detection import sperm_class_ids
+from utils.annotations import frame_annotations
 from reports.generator import ReportGenerator
 import cv2
 
@@ -33,7 +34,8 @@ def run_pipeline(
     prog_linearity_threshold: float = 0.8,
     immotile_speed_threshold: float = 5.0,
     fps_mode: str = "auto",
-    chamber_type: str = "custom"
+    chamber_type: str = "custom",
+    annotation_callback=None,
 ):
     calibration = CalibrationSettings(
         pixel_scale=pixel_scale,
@@ -79,7 +81,8 @@ def run_pipeline(
     report_gen = ReportGenerator(output_dir=output_dir)
     
     # 2. Run Tracking
-    print("Step 1: Running RT-DETR + ByteTrack...")
+    model_name = "YOLO" if ('yolo' in model_path.lower() or 'best.pt' in model_path.lower()) else "RT-DETR"
+    print(f"Step 1: Running {model_name} + ByteTrack...")
     
     video_writer = None
     frame_width, frame_height = 0, 0
@@ -100,6 +103,8 @@ def run_pipeline(
             video_writer.write(img)
             per_frame_counts.append(detection_count)
             tracked_observations += len(tracks)
+            if annotation_callback is not None:
+                annotation_callback(frame_idx, tracker.frame_detections)
             if progress_callback is not None:
                 progress_callback(frame_idx, total_frames)
     finally:
@@ -218,7 +223,8 @@ def analyze_single_image(
     pixel_scale: float = 0.8,
     chamber_depth: float = 20.0,
     dilution_factor: float = 1.0,
-    calibration: CalibrationSettings = None
+    calibration: CalibrationSettings = None,
+    annotation_callback=None,
 ):
     if calibration is None:
         calibration = CalibrationSettings(pixel_scale=pixel_scale, chamber_depth=chamber_depth, dilution_factor=dilution_factor)
@@ -258,6 +264,12 @@ def analyze_single_image(
     else:
         total_sperm = 0
         
+    if annotation_callback is not None:
+        boxes = [] if r.boxes is None else frame_annotations(
+            r.boxes.xyxy.cpu().numpy(), r.boxes.cls.cpu().numpy(), r.boxes.conf.cpu().numpy(), class_ids
+        )
+        annotation_callback(0, boxes)
+
     img_height, img_width = annotated_img.shape[:2]
     estimated_concentration = calibration.concentration(total_sperm, img_width, img_height)
     

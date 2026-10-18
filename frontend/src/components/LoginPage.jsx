@@ -1,210 +1,126 @@
-import { useEffect, useRef, useState } from 'react';
+import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import {
-  AlertCircle,
-  ShieldCheck,
-  ArrowLeft,
-  Sparkles,
-  UserPlus,
-  Info
-} from 'lucide-react';
-import { setRoleMode, getAccounts } from '../auth';
+import { AlertCircle, ArrowLeft, Sparkles, Info, Mail, Lock, Eye, EyeOff, ArrowRight } from 'lucide-react';
+import { loginWithServer } from '../auth';
 import '../login.css';
 import BrandLogos from './BrandLogos';
-import FlyingButton from './FlyingButton';
-
-// Jeda sebelum panel bergeser, agar tombol sempat lepas landas dulu
-const SWITCH_DELAY_MS = 650;
-
-const EMPTY_REGISTRATION = { fullName: '', birthDate: '', phone: '', email: '', password: '' };
 
 export default function LoginPage() {
   const navigate = useNavigate();
-  const [mode, setMode] = useState('login');
-  const [switching, setSwitching] = useState(false);
-  const [registration, setRegistration] = useState(EMPTY_REGISTRATION);
-  const [registerNotice, setRegisterNotice] = useState('');
-  const switchTimer = useRef(null);
+  const [credentials, setCredentials] = useState({ email: '', password: '' });
+  const [showPassword, setShowPassword] = useState(false);
+  const [loginError, setLoginError] = useState('');
+  const [loggingIn, setLoggingIn] = useState(false);
 
-  useEffect(() => () => clearTimeout(switchTimer.current), []);
-
-  const handleSelectRole = (roleId) => {
-    if (setRoleMode(roleId)) {
+  const handleLogin = async (event) => {
+    event.preventDefault();
+    setLoginError('');
+    if (!credentials.email.trim() || !credentials.password) {
+      setLoginError('Harap masukkan email dan kata sandi.');
+      return;
+    }
+    setLoggingIn(true);
+    const result = await loginWithServer(credentials.email, credentials.password);
+    setLoggingIn(false);
+    if (result.success) {
       navigate('/dashboard');
+    } else {
+      setLoginError(result.error);
     }
   };
 
-  // Tombol terbang (trigger klik) lalu panel bergeser ke sisi lain beserta warnanya
-  const handleSwitchMode = () => {
-    if (switching) return;
-    setSwitching(true);
-    switchTimer.current = setTimeout(() => {
-      setMode((prev) => (prev === 'login' ? 'register' : 'login'));
-      setRegisterNotice('');
-      setSwitching(false);
-    }, SWITCH_DELAY_MS);
-  };
-
-  const updateRegistration = (field) => (event) => {
-    setRegistration((prev) => ({ ...prev, [field]: event.target.value }));
-  };
-
-  const handleRegister = (event) => {
-    event.preventDefault();
-    setRegisterNotice('Registrasi pasien belum tersedia: akun pasien memerlukan layanan autentikasi dan database di server. Data Anda tidak disimpan.');
-  };
-
-  const accounts = getAccounts();
-  const isRegister = mode === 'register';
-
   return (
     <div className="login-page-root">
-      {/* Main Form Center */}
-      <main className="login-main-container">
-        <div className={`auth-shell ${isRegister ? 'is-register' : ''}`}>
-          {/* Tetap di kiri atas, tidak ikut bergeser bersama panel */}
-          <Link to="/" className="auth-back-home">
-            <ArrowLeft size={16} />
-            <span>Kembali ke Beranda</span>
-          </Link>
+      <div className="auth-shell">
+        <Link to="/" className="auth-back-home">
+          <ArrowLeft size={16} />
+          <span>Kembali ke Beranda</span>
+        </Link>
 
-          {/* Panel kiri: Login (pilih peran) */}
-          <section className="auth-pane auth-pane-login" aria-hidden={isRegister} inert={isRegister}>
-            <div className="login-header">
-              <div className="login-badge">
-                <Sparkles size={14} />
-                <span>Portal Masuk Tenaga Medis</span>
+        {/* Panel kiri: form masuk untuk pasien dan staf */}
+        <section className="auth-pane auth-pane-login">
+          <div className="login-header">
+            <div className="login-badge">
+              <Sparkles size={14} />
+              <span>Portal Masuk CASA-AI</span>
+            </div>
+            <h2 className="login-title">Masuk ke Akun Anda</h2>
+            <p className="login-subtitle">
+              Staf laboratorium dan pasien masuk dengan akun yang dibuat oleh Front Office.
+            </p>
+          </div>
+
+          <form onSubmit={handleLogin} className="auth-login-form">
+            <div className="login-form-group">
+              <label htmlFor="login-email">Email</label>
+              <div className="login-input-wrap">
+                <Mail size={18} className="login-input-icon" />
+                <input
+                  id="login-email"
+                  type="email"
+                  className="login-input"
+                  placeholder="nama@lab.id"
+                  autoComplete="username"
+                  value={credentials.email}
+                  onChange={(e) => setCredentials((prev) => ({ ...prev, email: e.target.value }))}
+                />
               </div>
-              <h2 className="login-title">Autentikasi Akun</h2>
-              <p className="login-subtitle">
-                Pilih peran untuk mengakses instrumen analisis spermatozoa dan acuan standar WHO 6th.
-              </p>
             </div>
 
-            <div className="login-error-alert">
-              <AlertCircle size={16} flexShrink={0} />
-              <span>Autentikasi akun belum tersedia. Pilih mode peran untuk membuka dashboard sesuai wewenangnya.</span>
-            </div>
-
-            <div className="login-divider-wrap">
-              <span>Pilih Mode Peran</span>
-            </div>
-
-            <div className="demo-accounts-grid">
-              {accounts.map((acc) => (
-                <div
-                  key={acc.id}
-                  className="demo-account-tile"
-                  onClick={() => handleSelectRole(acc.id)}
-                  title={`Buka dashboard sebagai ${acc.name}`}
+            <div className="login-form-group">
+              <label htmlFor="login-password">Kata Sandi</label>
+              <div className="login-input-wrap">
+                <Lock size={18} className="login-input-icon" />
+                <input
+                  id="login-password"
+                  type={showPassword ? 'text' : 'password'}
+                  className="login-input"
+                  placeholder="Masukkan kata sandi"
+                  autoComplete="current-password"
+                  value={credentials.password}
+                  onChange={(e) => setCredentials((prev) => ({ ...prev, password: e.target.value }))}
+                />
+                <button
+                  type="button"
+                  className="password-toggle-btn"
+                  onClick={() => setShowPassword((prev) => !prev)}
+                  title={showPassword ? 'Sembunyikan kata sandi' : 'Lihat kata sandi'}
                 >
-                  <div className="demo-tile-left">
-                    <div className="demo-info-text">
-                      <span
-                        className="demo-role-badge"
-                        style={{ background: acc.badgeColor, color: acc.badgeTextColor }}
-                      >
-                        {acc.badge}
-                      </span>
-                      <div className="demo-name">{acc.name}</div>
-                      <div className="demo-cred">{acc.scope}</div>
-                    </div>
-                  </div>
-                  <button type="button" className="demo-btn-action">
-                    Masuk →
-                  </button>
-                </div>
-              ))}
-            </div>
-
-            <div className="login-security-notice">
-              <ShieldCheck size={14} color="#00AFA0" />
-              <span>Mode peran hanya membatasi menu yang tampil; belum ada verifikasi identitas.</span>
-            </div>
-          </section>
-
-          {/* Panel kanan: Registrasi Pasien */}
-          <section className="auth-pane auth-pane-register" aria-hidden={!isRegister} inert={!isRegister}>
-            <div className="login-header">
-              <div className="login-badge login-badge-lime">
-                <UserPlus size={14} />
-                <span>Registrasi Pasien</span>
-              </div>
-              <h2 className="login-title">Buat Akun Pasien</h2>
-              <p className="login-subtitle">
-                Akun pasien dipakai untuk melihat dan mengunduh laporan milik sendiri yang telah dirilis dokter.
-              </p>
-            </div>
-
-            <form onSubmit={handleRegister}>
-              <div className="login-form-group">
-                <label htmlFor="reg-name">Nama Lengkap</label>
-                <input id="reg-name" className="login-input auth-input" required autoComplete="name" value={registration.fullName} onChange={updateRegistration('fullName')} />
-              </div>
-              <div className="auth-form-row">
-                <div className="login-form-group">
-                  <label htmlFor="reg-birth">Tanggal Lahir</label>
-                  <input id="reg-birth" type="date" className="login-input auth-input" required value={registration.birthDate} onChange={updateRegistration('birthDate')} />
-                </div>
-                <div className="login-form-group">
-                  <label htmlFor="reg-phone">No. HP</label>
-                  <input id="reg-phone" type="tel" className="login-input auth-input" required autoComplete="tel" value={registration.phone} onChange={updateRegistration('phone')} />
-                </div>
-              </div>
-              <div className="login-form-group">
-                <label htmlFor="reg-email">Email</label>
-                <input id="reg-email" type="email" className="login-input auth-input" required autoComplete="email" value={registration.email} onChange={updateRegistration('email')} />
-              </div>
-              <div className="login-form-group">
-                <label htmlFor="reg-password">Kata Sandi</label>
-                <input id="reg-password" type="password" className="login-input auth-input" required minLength={8} autoComplete="new-password" value={registration.password} onChange={updateRegistration('password')} />
-              </div>
-
-              {registerNotice && (
-                <div className="auth-info-alert" role="status">
-                  <Info size={16} flexShrink={0} />
-                  <span>{registerNotice}</span>
-                </div>
-              )}
-
-              <button type="submit" className="btn-login-submit">
-                <UserPlus size={16} />
-                <span>Daftar sebagai Pasien</span>
-              </button>
-            </form>
-          </section>
-
-          {/* Panel warna yang bergeser menutupi salah satu sisi, berisi tombol terbang */}
-          <aside className="auth-overlay">
-            <div className="auth-overlay-inner">
-              <BrandLogos size={48} />
-              <h3>{isRegister ? 'Sudah punya akun?' : 'Pasien baru?'}</h3>
-              <p>
-                {isRegister
-                  ? 'Kembali ke halaman masuk untuk tenaga medis dan staf laboratorium.'
-                  : 'Daftarkan diri Anda untuk mengakses laporan hasil pemeriksaan yang telah dirilis.'}
-              </p>
-              <div className="auth-fly-zone">
-                <FlyingButton
-                  theme="dark"
-                  size="large"
-                  trigger="click"
-                  carryCursor={false}
-                  altitude={150}
-                  hoverTime={0.6}
-                  wobble={0.6}
-                  buttonColor="#FFFFFF"
-                  textColor={isRegister ? '#4D5A0F' : '#00776D'}
-                  thrustColor={isRegister ? '#00AFA0' : '#C1D72E'}
-                  onClick={handleSwitchMode}
-                >
-                  {isRegister ? 'Masuk' : 'Registrasi'}
-                </FlyingButton>
+                  {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                </button>
               </div>
             </div>
-          </aside>
-        </div>
-      </main>
+
+            {loginError && (
+              <div className="login-error-alert" role="alert">
+                <AlertCircle size={16} flexShrink={0} />
+                <span>{loginError}</span>
+              </div>
+            )}
+
+            <button type="submit" className="btn-login-submit" disabled={loggingIn}>
+              <span>{loggingIn ? 'Memverifikasi...' : 'Masuk'}</span>
+              <ArrowRight size={16} />
+            </button>
+          </form>
+        </section>
+
+        {/* Panel kanan: informasi saja, tanpa aksi */}
+        <aside className="auth-overlay">
+          <div className="auth-overlay-inner">
+            <BrandLogos size={48} />
+            <h3>Belum punya akun?</h3>
+            <p>
+              Akun pasien dibuatkan oleh petugas Front Office saat pemeriksaan didaftarkan.
+              Hubungi petugas di klinik atau laboratorium Anda.
+            </p>
+            <div className="auth-info-alert" role="status" style={{ marginTop: '18px', maxWidth: '320px' }}>
+              <Info size={16} flexShrink={0} />
+              <span>Laporan hanya bisa dilihat setelah dokter merilisnya.</span>
+            </div>
+          </div>
+        </aside>
+      </div>
     </div>
   );
 }
