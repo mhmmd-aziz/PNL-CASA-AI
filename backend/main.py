@@ -40,6 +40,7 @@ except ImportError as e:
 app = FastAPI(title="CASA-AI API")
 
 from auth_routes import router as auth_router, require_roles, sign_output_url, verify_output_url
+from database.db_connection import log_audit_event
 app.include_router(auth_router)
 from examinations_routes import router as examinations_router, patients_router, check_analysis_target, persist_video_analysis
 app.include_router(examinations_router)
@@ -108,9 +109,65 @@ async def get_calibration(user: dict = Depends(require_roles("ANALYST", "SUPER_A
 @app.put("/api/calibration", response_model=CalibrationSettings)
 async def update_calibration(settings: CalibrationSettings, user: dict = Depends(require_roles("SUPER_ADMIN"))):
     try:
-        return save_calibration(settings)
+        previous = load_calibration().model_dump()
+    except (OSError, ValueError):
+        previous = None
+    try:
+        saved = save_calibration(settings)
     except OSError as error:
         raise HTTPException(status_code=500, detail="Konfigurasi kalibrasi gagal disimpan di server.") from error
+    current = saved.model_dump()
+    changed = sorted(key for key, value in current.items() if previous is None or previous.get(key) != value)
+    log_audit_event(
+        actor_id=user["id"],
+        action_type="UPDATE_CALIBRATION",
+        description=f"Profil kalibrasi disimpan. Nilai berubah: {', '.join(changed) or 'tidak ada'}",
+        target_type="calibration",
+        actor_email=user.get("email"),
+        actor_role=user.get("role"),
+        before_state=previous,
+        after_state=current,
+    )
+    return saved
+
+
+def audit_analysis(*, user, examination_id, task_id, model_path, conf_thres, calibration, kind, run_id=None, error=None):
+    """Mencatat hasil sebuah analisis (berhasil atau gagal). Kegagalan mencatat tidak boleh menggagalkan analisis."""
+    try:
+        ok = error is None
+        log_audit_event(
+            actor_id=user["id"],
+            action_type="RUN_ANALYSIS",
+            description=(f"Analisis {kind} selesai" if ok else f"Analisis {kind} gagal") + f" (tugas {task_id[:8]})",
+            target_type="examination" if examination_id is not None else "analysis",
+            target_id=examination_id,
+            actor_email=user.get("email"),
+            actor_role=user.get("role"),
+            after_state={
+                "task_id": task_id, "run_id": run_id, "model": Path(model_path).name,
+                "conf_thres": conf_thres, "calibration": calibration.model_dump(),
+            },
+            result="SUCCESS" if ok else "FAILURE",
+            error_message=None if ok else str(error)[:300],
+        )
+    except Exception:
+        import traceback
+        traceback.print_exc()
+
+
+def audit_upload(*, user, examination_id, task_id, path, kind):
+    """Mencatat unggahan media. Nama berkas asli dari klien sengaja tidak disimpan di log."""
+    size = path.stat().st_size
+    log_audit_event(
+        actor_id=user["id"],
+        action_type="UPLOAD_MEDIA",
+        description=f"{kind.capitalize()} diunggah untuk analisis (tugas {task_id[:8]}, {size} byte)",
+        target_type="examination" if examination_id is not None else "analysis",
+        target_id=examination_id,
+        actor_email=user.get("email"),
+        actor_role=user.get("role"),
+        after_state={"task_id": task_id, "extension": path.suffix.lower(), "size_bytes": size},
+    )
 
 
 def analysis_calibration(
@@ -170,8 +227,10 @@ def process_video_task(
     conf_thres: float,
     calibration: CalibrationSettings,
     examination_id: Optional[int] = None,
-    actor_id: Optional[int] = None
+    actor_id: Optional[int] = None,
+    actor: Optional[dict] = None
 ):
+    actor = actor or {"id": actor_id}
     try:
         def progress_callback(frame_idx, total_frames):
             PROGRESS_STORE[task_id] = {"status": "processing", "frame": frame_idx, "total_frames": total_frames}
@@ -220,9 +279,13 @@ def process_video_task(
             "video_url": video_url,
             "heatmap_url": heatmap_url
         }
+        audit_analysis(user=actor, examination_id=examination_id, task_id=task_id, model_path=model_path,
+                       conf_thres=conf_thres, calibration=calibration, kind="video", run_id=run_id)
     except Exception as e:
         import traceback
         traceback.print_exc()
+        audit_analysis(user=actor, examination_id=examination_id, task_id=task_id, model_path=model_path,
+                       conf_thres=conf_thres, calibration=calibration, kind="video", error=e)
         RESULT_STORE[task_id] = {
             "success": False,
             "error": str(e)
@@ -248,6 +311,7 @@ async def analyze_video(
         with open(video_path, "wb") as buffer:
             shutil.copyfileobj(video.file, buffer)
             
+        audit_upload(user=user, examination_id=examination_id, task_id=task_id, path=video_path, kind="video")
         TASK_OWNERS[task_id] = user["id"]
         PROGRESS_STORE[task_id] = {"status": "starting", "frame": 0}
         
@@ -260,7 +324,8 @@ async def analyze_video(
             conf_thres=conf_thres,
             calibration=calibration,
             examination_id=examination_id,
-            actor_id=user["id"]
+            actor_id=user["id"],
+            actor=user
         )
         
         return JSONResponse(content={"task_id": task_id})
@@ -299,6 +364,8 @@ async def analyze_image_endpoint(
 ):
     if examination_id is not None:
         raise HTTPException(status_code=422, detail="Analisis citra belum bisa dikaitkan ke pemeriksaan. Gunakan video untuk sampel pemeriksaan.")
+    analysis_id = None
+    model_path = ""
     try:
         model_path = trained_model_path()
         image_path = UPLOAD_DIR / f"{uuid.uuid4()}{Path(image.filename or 'image.jpg').suffix}"
@@ -306,6 +373,7 @@ async def analyze_image_endpoint(
             shutil.copyfileobj(image.file, buffer)
             
         analysis_id = image_path.stem
+        audit_upload(user=user, examination_id=None, task_id=analysis_id, path=image_path, kind="gambar")
         with capture_annotations(analysis_id) as (annotations_path, capture):
             full_data, output_image_path = analyze_single_image(
                 image_path=str(image_path),
@@ -323,6 +391,8 @@ async def analyze_image_endpoint(
         
         register_analysis(analysis_id, user["id"], image_path, annotations_path, full_data, output_image_path, None,
                           calibration.model_dump(), model_path, conf_thres, is_image=True)
+        audit_analysis(user=user, examination_id=None, task_id=analysis_id, model_path=model_path,
+                       conf_thres=conf_thres, calibration=calibration, kind="gambar")
 
         return JSONResponse(content={
             "success": True,
@@ -337,10 +407,16 @@ async def analyze_image_endpoint(
     except HTTPException:
         raise
     except ValueError as error:
+        if analysis_id is not None:
+            audit_analysis(user=user, examination_id=None, task_id=analysis_id, model_path=model_path,
+                           conf_thres=conf_thres, calibration=calibration, kind="gambar", error=error)
         raise HTTPException(status_code=422, detail=str(error)) from error
     except Exception as e:
         import traceback
         traceback.print_exc()
+        if analysis_id is not None:
+            audit_analysis(user=user, examination_id=None, task_id=analysis_id, model_path=model_path,
+                           conf_thres=conf_thres, calibration=calibration, kind="gambar", error=e)
         raise HTTPException(status_code=500, detail=str(e))
 
 # Triggering uvicorn reload

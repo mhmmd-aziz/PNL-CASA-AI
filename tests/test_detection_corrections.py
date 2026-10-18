@@ -105,9 +105,12 @@ class CorrectionAPI(unittest.TestCase):
             patch.object(correction_routes, "STORE_DIR", self.root / "private"),
             patch.object(correction_routes, "OUTPUT_DIR", self.root),
             patch.object(correction_routes, "sign_output_url", side_effect=lambda name, owner: f"/outputs/{name}?test_owner={owner}"),
+            # Pencatatan audit tidak boleh menulis ke database lokal pada tes ini
+            patch.object(correction_routes, "log_audit_event"),
         ]
         for patched in self.patches:
             patched.start()
+        self.audit = correction_routes.log_audit_event
         application = FastAPI()
         application.include_router(correction_routes.router)
         application.dependency_overrides[correction_routes.ANALYST.dependency] = lambda: self.owner
@@ -146,11 +149,17 @@ class CorrectionAPI(unittest.TestCase):
         self.assertEqual(result["revision"], 1)
         self.assertEqual(result["data"]["summary"]["total_sperm"], 2)
         self.assertEqual(result["data"]["manual_correction"]["actor_id"], 7)
+        saved = self.audit.call_args.kwargs
+        self.assertEqual(saved["action_type"], "SAVE_DETECTION_CORRECTION")
+        self.assertEqual((saved["actor_id"], saved["target_type"]), (7, "analysis"))
+        self.assertEqual(saved["after_state"]["revision"], 1)
+        self.assertIn("Objek terlewat ditambahkan", saved["description"])
         self.assertNotIn("test_owner", json.dumps(result["data"]))
         stored = self.client.get("/api/analysis/test-session/annotations").json()
         self.assertEqual(stored["original_result"]["data"], self.original)
         self.assertNotEqual(stored["original_result"]["video_url"], stored["current_result"]["video_url"])
         self.assertEqual(self.client.post("/api/analysis/test-session/corrections", json=self.request()).status_code, 409)
+        self.assertEqual(self.audit.call_count, 1)  # edit yang ditolak tidak dicatat sebagai koreksi tersimpan
         boxes = self.client.get("/api/analysis/test-session/frames/0").json()
         self.assertEqual(len(boxes["original"]), 1)
         self.assertEqual(len(boxes["boxes"]), 2)

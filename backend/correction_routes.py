@@ -10,7 +10,8 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from pydantic import BaseModel, Field
 
 from auth_routes import require_roles, sign_output_url
-from detection_corrections import CorrectionRequest, FrameReader, propagate_tracks, read_frames, render_revision, validate_frames
+from database.db_connection import log_audit_event
+from detection_corrections import CorrectionRequest, FrameReader, propagate_deletions, propagate_tracks, read_frames, render_revision, validate_frames
 from examinations_routes import check_analysis_target, persist_video_analysis
 
 
@@ -158,14 +159,17 @@ def build_overrides(session, request):
             values["source"] = "ai" if unchanged else "manual"
             corrected.append(values)
         overrides[str(frame.frame)] = corrected
-    if not request.tracks:
+    if not request.tracks and not request.deletions:
         return overrides, []
     if session["is_image"]:
         raise ValueError("Citra tunggal tidak memiliki pelacakan lintasan.")
     frames_by_index = {index: boxes for index, boxes in read_frames(session["annotations"])}
     reader = FrameReader(session["source"], session["width"], session["height"])
     try:
-        propagation = propagate_tracks(reader, frames_by_index, overrides, session["frame_count"], request.tracks)
+        propagation = []
+        if request.tracks:
+            propagation = propagate_tracks(reader, frames_by_index, overrides, session["frame_count"], request.tracks)
+        propagation = propagation + propagate_deletions(reader, frames_by_index, overrides, session["frame_count"], request.deletions)
     finally:
         reader.close()
     return overrides, propagation
@@ -197,6 +201,16 @@ def attach_analysis(analysis_id: str, request: AttachRequest, user: dict = ANALY
         database.execute("BEGIN IMMEDIATE")
         database.execute("UPDATE sessions SET payload = ? WHERE id = ?", (json.dumps(session, allow_nan=False), analysis_id))
         database.commit()
+        log_audit_event(
+            actor_id=user["id"],
+            action_type="ATTACH_ANALYSIS",
+            description=f"Hasil analisis {analysis_id[:8]} dikaitkan ke pemeriksaan",
+            target_type="examination",
+            target_id=request.examination_id,
+            actor_email=user.get("email"),
+            actor_role=user.get("role"),
+            after_state={"analysis_id": analysis_id, "run_id": session["run_id"]},
+        )
         return {"ok": True, "examination_id": request.examination_id}
     finally:
         database.close()
@@ -255,6 +269,16 @@ def save_corrections(analysis_id: str, request: CorrectionRequest, user: dict = 
         database.execute("INSERT INTO revisions VALUES (?, ?, ?)", (analysis_id, revision, json.dumps({"audit": audit, "frames": overrides, "result": data, "media": media, "heatmap": heatmap}, allow_nan=False)))
         database.execute("UPDATE sessions SET payload = ? WHERE id = ?", (json.dumps(session, allow_nan=False), analysis_id))
         database.commit()
+        log_audit_event(
+            actor_id=user["id"],
+            action_type="SAVE_DETECTION_CORRECTION",
+            description=f"Koreksi deteksi disimpan (revisi {revision}, {len(overrides)} frame terkoreksi). Alasan: {request.reason.strip()[:200]}",
+            target_type="examination" if session["examination_id"] is not None else "analysis",
+            target_id=session["examination_id"],
+            actor_email=user.get("email"),
+            actor_role=user.get("role"),
+            after_state={"analysis_id": analysis_id, "revision": revision, "previous_revision": revision - 1, "corrected_frames": len(overrides)},
+        )
         return result_payload(session) | {"propagation": propagation}
     except ValueError as error:
         database.rollback()

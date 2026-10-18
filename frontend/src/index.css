@@ -959,6 +959,30 @@ body {
   color: var(--teal);
 }
 
+/* Filter log audit: tombol tidak boleh diperas oleh kolom isian */
+.audit-filter {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.audit-filter .search-box {
+  flex: 1 1 240px;
+  min-width: 200px;
+}
+
+@media (max-width: 700px) {
+  .audit-filter {
+    flex-wrap: wrap;
+    width: 100%;
+  }
+}
+
+.audit-filter-btn {
+  flex: none;
+  padding: 10px 16px;
+}
+
 /* Wallets List / Motility Categories Breakdown */
 .subsets-header {
   font-size: 0.8rem;

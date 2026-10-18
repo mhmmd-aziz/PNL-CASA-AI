@@ -3,7 +3,7 @@ import axios from 'axios';
 import { API_BASE_URL } from '../api';
 import { getAuthHeader } from '../auth';
 import { getErrorMessage } from '../calibration';
-import { EMPTY_HISTORY, annotationHistory, boundedPoint, drawnBox, movedBox, resizedBox, correctionFrames, newTrackSeeds } from '../detectionEditor';
+import { EMPTY_HISTORY, annotationHistory, boundedPoint, drawnBox, movedBox, resizedBox, correctionFrames, newTrackSeeds, deletionSeed, describeDeletion } from '../detectionEditor';
 import '../detection-editor.css';
 
 function describePropagation(propagation = []) {
@@ -34,6 +34,7 @@ export default function DetectionEditor({ analysisId, onSave, onPendingChange, o
   const [preview, setPreview] = useState(null);
   const [previewing, setPreviewing] = useState(false);
   const [autoTrack, setAutoTrack] = useState(false);
+  const [autoDelete, setAutoDelete] = useState(null);
   const svgRef = useRef(null);
   const busy = saving || Boolean(gesture);
   const dirty = Object.keys(history.present).length > 0;
@@ -128,6 +129,32 @@ export default function DetectionEditor({ analysisId, onSave, onPendingChange, o
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoTrack, previewing, busy]);
 
+  // Kotak yang dihapus dicari di frame sebelum dan sesudahnya lalu dihapus juga; hasilnya digabung ke langkah penghapusan
+  const propagateDeletion = async ({ seed, pastLength }) => {
+    setError('');
+    setPreviewing(true);
+    try {
+      const response = await axios.post(`${API_BASE_URL}/api/analysis/${analysisId}/corrections/preview`, {
+        revision: metadata.revision, reason: 'Penghapusan otomatis', frames: correctionFrames(history.present), tracks: [], deletions: [seed],
+      }, { headers: getAuthHeader() });
+      const frames = Object.fromEntries(response.data.frames.map((item) => [item.frame, item.boxes]));
+      dispatch({ type: 'amend', frames, pastLength });
+      setPreview(response.data.propagation);
+    } catch (failure) {
+      setError(`Kotak hanya dihapus pada frame ini. ${getErrorMessage(failure)}`);
+    } finally {
+      setPreviewing(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!autoDelete || previewing || busy) return;
+    const pending = autoDelete;
+    setAutoDelete(null);
+    propagateDeletion(pending);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoDelete, previewing, busy]);
+
   const edit = (nextBoxes) => {
     if (JSON.stringify(nextBoxes) !== JSON.stringify(editedBoxes)) {
       setPreview(null);
@@ -183,6 +210,16 @@ export default function DetectionEditor({ analysisId, onSave, onPendingChange, o
       }
     }
     setGesture(null);
+  };
+
+  const removeSelected = () => {
+    if (!selected) return;
+    // Kotak yang baru ditambahkan dan belum disimpan hanya dibatalkan; tidak mencari deteksi AI di frame lain
+    const wasSaved = savedBoxes.some((box) => box.id === selected.id);
+    const seed = deletionSeed(frame, selected);
+    edit(editedBoxes.filter((box) => box.id !== selectedId));
+    setSelectedId(null);
+    if (wasSaved && !metadata.is_image) setAutoDelete({ seed, pastLength: history.past.length + 1 });
   };
 
   const changeSelected = (changes) => edit(editedBoxes.map((box) => box.id === selectedId ? { ...box, ...changes } : box));
@@ -244,13 +281,13 @@ export default function DetectionEditor({ analysisId, onSave, onPendingChange, o
           <li>Tulis alasan koreksi (minimal 3 karakter).</li>
           <li>Klik Simpan koreksi &amp; hitung ulang. Kotak yang ditambahkan atau diubah labelnya otomatis diberi ID lintasan dan dicari di frame sebelum dan sesudahnya, lalu hasil dan preview dihitung ulang.</li>
         </ol>
-        <p className="editor-warning">Koreksi manual berlaku pada frame yang diedit. Pelacakan mencocokkan tampilan objek di video dan berhenti jika objek tidak ditemukan lebih dari 3 frame berturut-turut.</p>
+        <p className="editor-warning">Kotak yang dihapus juga dicari di frame sebelum dan sesudahnya, lalu dihapus di sana (Undo membatalkan sekaligus). Koreksi manual lain berlaku pada frame yang diedit. Pelacakan mencocokkan tampilan objek di video dan berhenti jika objek tidak ditemukan lebih dari 3 frame berturut-turut.</p>
         {!metadata && !error && <p role="status">Memuat data deteksi...</p>}
         {metadata && <>
           <div className="editor-toolbar">
             <button type="button" aria-pressed={tool === 'select'} disabled={busy || showOriginal} onClick={() => setTool('select')}>Pilih / geser</button>
             <button type="button" aria-pressed={tool === 'add'} disabled={busy || showOriginal} onClick={() => setTool('add')}>Tambah kotak</button>
-            <button type="button" disabled={!selected || busy || showOriginal} onClick={() => { edit(editedBoxes.filter((box) => box.id !== selectedId)); setSelectedId(null); }}>Hapus kotak</button>
+            <button type="button" disabled={!selected || busy || showOriginal} onClick={removeSelected}>Hapus kotak</button>
             <button type="button" disabled={!history.past.length || busy} onClick={() => dispatch({ type: 'undo' })}>Undo</button>
             <button type="button" disabled={!history.future.length || busy} onClick={() => dispatch({ type: 'redo' })}>Redo</button>
           </div>
@@ -309,8 +346,8 @@ export default function DetectionEditor({ analysisId, onSave, onPendingChange, o
           </div>}
           {!previewing && preview && <div role="status" className="editor-notice" style={{ fontSize: '0.8rem', display: 'flex', flexDirection: 'column', gap: '4px' }}>
             {preview.length === 0 && <span>Tidak ada objek baru yang perlu dilacak.</span>}
-            {preview.map((track) => <span key={track.track_id ?? track.start_frame}>
-              {track.track_id == null ? 'Objek tidak dilacak (kontras terlalu rendah untuk dicocokkan).'
+            {preview.map((track, position) => <span key={track.kind === 'delete' ? `delete-${position}` : (track.track_id ?? track.start_frame)}>
+              {track.kind === 'delete' ? describeDeletion(track) : track.track_id == null ? 'Objek tidak dilacak (kontras terlalu rendah untuk dicocokkan).'
                 : track.linked_frames === 0 ? `ID ${track.track_id}: objek tidak ditemukan di frame sekitarnya. Hanya frame ini yang berubah.`
                   : `ID ${track.track_id} (${track.label === 'excluded' ? 'bukan sperma' : 'sperma'}): terlacak di frame ${track.start_frame + 1} sampai ${track.end_frame + 1}, total ${track.linked_frames + 1} frame. Undo membatalkan, simpan untuk menyimpan revisi.`}
             </span>)}

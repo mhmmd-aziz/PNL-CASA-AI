@@ -100,7 +100,7 @@ function ReportDocumentBody({ report, preview = false }) {
       {report.recommendations && (
         <div className="report-section">
           <h3>Rekomendasi</h3>
-          <p>{report.recommendations}</p>
+          <p style={{ whiteSpace: 'pre-line' }}>{report.recommendations}</p>
         </div>
       )}
 

@@ -17,8 +17,8 @@ Alur yang diuji dari ujung ke ujung lewat API asli (FastAPI `TestClient`):
 
 | Pemeriksaan | Perintah | Hasil |
 | --- | --- | --- |
-| Seluruh tes Python (termasuk 36 tes skenario) | `python -m unittest discover -s tests -p "test_*.py"` | **124 tes OK** (2 di antaranya *expected failure*, lihat Temuan) |
-| Tes unit frontend | `cd frontend && node --test src/*.test.js` | **31 lulus**, 0 gagal |
+| Seluruh tes Python (termasuk 42 tes skenario) | `python -m unittest discover -s tests -p "test_*.py"` | **157 tes OK** (2 di antaranya *expected failure*, lihat Temuan) |
+| Tes unit frontend | `cd frontend && node --test src/*.test.js` | **46 lulus**, 0 gagal |
 | Lint frontend | `cd frontend && npm run lint` | Lulus (exit 0) |
 
 ## a. Skenario Positif — alur normal
@@ -69,6 +69,58 @@ Alur yang diuji dari ujung ke ujung lewat API asli (FastAPI `TestClient`):
 | E12 | Sesi kedaluwarsa / akun dinonaktifkan | 401; login akun nonaktif 403 | ✅ |
 | E13 | Nama file upload berisi *path traversal* (`../../../backend/main.mp4`) | File disimpan dengan nama UUID di folder upload | ✅ |
 | E14 | Super Admin menonaktifkan akun Super Admin terakhir | 409 | ✅ |
+
+## d. Jejak audit
+
+Setiap tindakan penting harus tercatat di log audit dan terlihat oleh Super Admin lewat API log audit. Kelas `AuditScenarios` menguji hal ini pada database terisolasi.
+
+| ID | Yang diuji | Hasil |
+| --- | --- | --- |
+| A1 | Unggah video dan analisis tercatat (`UPLOAD_MEDIA`, `RUN_ANALYSIS` dengan model, ambang, dan kalibrasi); keduanya muncul di `/api/admin/audit-logs` atas nama analis | ✅ |
+| A2 | Analisis yang gagal tercatat sebagai `FAILURE` beserta pesan galatnya | ✅ |
+| A3 | Perubahan kalibrasi mencatat nilai sebelum dan sesudah, dan permintaan yang ditolak validasi tidak meninggalkan catatan | ✅ |
+| A4 | Pengisian data makroskopis mencatat perubahan nilai angka dan pilihan; teks bebas tidak disalin ke log | ✅ |
+| A5 | Nama berkas asli dari klien (yang bisa memuat nama pasien) tidak masuk log | ✅ |
+| A6 | Analisis gambar tunggal tercatat, baik berhasil maupun gagal | ✅ |
+
+Simpan koreksi deteksi (`SAVE_DETECTION_CORRECTION`) dan perubahan kalibrasi juga diperiksa di tes `CorrectionAPI` dan `ApiQC`. Tes lama itu kini mengisolasi pencatatan audit supaya tidak menulis ke database lokal.
+
+Tampilan jam di panel Log Audit diuji di `frontend/src/formatTime.test.js`: waktu dari SQLite tanpa zona diperlakukan sebagai UTC dan ditampilkan dalam WIB.
+
+## e. Koreksi deteksi: hapus kotak merambat ke frame lain
+
+Menghapus kotak di editor koreksi juga menghapus objek yang sama di frame sebelum dan sesudahnya, memakai pencocokan tampilan dan aturan jeda yang sama dengan pelacakan kotak baru. Diuji pada video sintetis di `tests/test_deletion_propagation.py`.
+
+| Yang diuji | Hasil |
+| --- | --- |
+| Objek yang dihapus hilang di semua frame, objek lain tetap | ✅ |
+| Frame tanpa kotak yang cocok tidak diubah | ✅ |
+| Jeda sampai 3 frame dijembatani, jeda lebih dari 3 frame menghentikan pencarian | ✅ |
+| Objek berkontras rendah hanya dihapus di frame saat ini, dengan pesan yang jelas | ✅ |
+| Nomor frame atau kotak tidak valid ditolak (422); sesi citra tunggal ditolak | ✅ |
+| Kotak berlabel "bukan sperma" ikut merambat | ✅ |
+| Permintaan lama tanpa data hapus berjalan seperti sebelumnya | ✅ |
+| **Regresi jalur tambah:** kotak baru tetap dilacak ke seluruh frame | ✅ |
+
+Pengujian di tampilan (editor dengan API tiruan): satu kali tekan Hapus kotak menghasilkan satu permintaan, frame lain ikut terhapus, satu kali Undo mengembalikan semuanya, dan menghapus kotak yang baru ditambahkan (belum disimpan) tidak mencari deteksi AI di frame lain. Tes dirusak secara sengaja (mutasi) untuk memastikan tes benar-benar bisa gagal.
+
+## f. Rekomendasi untuk pasien
+
+Kolom Rekomendasi pada laporan dibaca pasien, jadi isinya harus berupa saran praktis untuk pasien, bukan catatan teknis untuk analis dan dokter. Saran aturan sekarang terpisah: `recommendations` (untuk pasien, masuk ke laporan) dan `review_notes` (untuk peninjau, tidak masuk ke laporan). Diuji di `tests/test_clinical_interpretation.py` dan skenario P9.
+
+| Yang diuji | Hasil |
+| --- | --- |
+| Jumlah sperma di bawah batas acuan: saran gaya hidup, hindari panas pada testis, pemeriksaan ulang sekitar 3 bulan, dan konsultasi ke dokter urologi atau andrologi | ✅ |
+| Gerak sperma di bawah batas acuan dan volume sampel di bawah batas acuan mendapat saran masing-masing | ✅ |
+| Semua parameter dalam rentang: saran singkat untuk menjaga kesehatan, tanpa saran pemeriksaan ulang | ✅ |
+| Masa pantang di luar 2–7 hari menambah petunjuk pengambilan sampel berikutnya | ✅ |
+| Hasil tidak tersedia: hanya dua baris umum, tanpa saran yang dikarang | ✅ |
+| Saran tidak memuat istilah teknis (kalibrasi, heatmap, tracking, koreksi analis), resep, dosis, vitamin, atau vonis seperti mandul | ✅ |
+| Kasus terburuk muat di kolom Rekomendasi (1.728 dari 2.000 karakter) | ✅ |
+| Catatan teknis (kalibrasi, kualitas tracking, koreksi manual, tinjauan video) masuk ke `review_notes`; endpoint tinjauan hanya untuk dokter | ✅ |
+| Perintah untuk draf AI meminta saran pasien tanpa catatan teknis, obat, atau dosis | ✅ |
+
+Saran untuk pasien bersifat umum dan dibuat otomatis dari angka hasil. Dokter wajib menyesuaikannya dengan riwayat pasien sebelum menyetujui, dan isinya belum ditinjau oleh tenaga ahli andrologi.
 
 ## Temuan terbuka
 

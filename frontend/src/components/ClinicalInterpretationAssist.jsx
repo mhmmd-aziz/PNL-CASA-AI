@@ -3,6 +3,7 @@ import axios from 'axios';
 import { ShieldCheck, Sparkles, AlertCircle } from 'lucide-react';
 import { API_BASE_URL } from '../api.js';
 import { getAuthHeader } from '../auth';
+import { numberedList } from '../recommendationText.js';
 
 const STATUS_STYLE = {
   below: { label: 'Di bawah acuan', color: '#DC2626' },
@@ -49,7 +50,7 @@ export default function ClinicalInterpretationAssist({ examinationId, currentInt
     if (!who || !confirmReplace()) return;
     onApply({
       interpretation: who.summary_text.slice(0, 2000),
-      recommendations: who.recommendations.join(' ').slice(0, 2000),
+      recommendations: numberedList(who.recommendations).slice(0, 2000),
     });
     setNotice({ type: 'ok', text: 'Teks aturan WHO dimasukkan. Anda dapat mengubahnya sebelum menyetujui.' });
   };
@@ -114,11 +115,19 @@ export default function ClinicalInterpretationAssist({ examinationId, currentInt
         </div>
       )}
       <div style={{ fontSize: '0.8rem' }}>
-        <strong>Saran aturan:</strong>
+        <strong>Saran untuk pasien</strong> <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>(masuk ke kolom Rekomendasi dan dibaca pasien; sesuaikan dengan riwayat pasien)</span>
         <ul style={{ margin: '4px 0 0', paddingLeft: '18px' }}>
           {who.recommendations.map((text) => <li key={text}>{text}</li>)}
         </ul>
       </div>
+      {(who.review_notes || []).length > 0 && (
+        <div style={{ fontSize: '0.8rem' }}>
+          <strong>Catatan untuk peninjau</strong> <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>(tidak masuk ke laporan pasien)</span>
+          <ul style={{ margin: '4px 0 0', paddingLeft: '18px' }}>
+            {who.review_notes.map((text) => <li key={text}>{text}</li>)}
+          </ul>
+        </div>
+      )}
 
       <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
         <button type="button" className="action-pill-btn primary" onClick={applyWho}>Pakai teks aturan WHO</button>

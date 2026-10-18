@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
 import axios from 'axios';
-import { UserCheck, ScrollText, CheckCircle2, AlertCircle } from 'lucide-react';
+import { UserCheck, ScrollText, CheckCircle2, AlertCircle, Search, X } from 'lucide-react';
 import { API_BASE_URL } from '../api.js';
 import { getAuthHeader } from '../auth';
+import { formatWib } from '../formatTime.js';
 
 const ROLE_OPTIONS = [
   { value: 'FRONT_OFFICE', label: 'Front Office / Admin Lab' },
@@ -21,7 +22,6 @@ function errorMessage(error) {
   return 'Permintaan gagal. Coba lagi.';
 }
 
-const fmtTime = (value) => (value ? new Date(value).toLocaleString('id-ID') : '—');
 const EMPTY_FORM = { email: '', fullName: '', role: 'FRONT_OFFICE', password: '', phoneNumber: '', licenseNumber: '' };
 
 export function UsersPanel() {
@@ -159,7 +159,7 @@ export function UsersPanel() {
                       {ROLE_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
                     </select>
                   </td>
-                  <td>{fmtTime(user.last_login_at)}</td>
+                  <td>{formatWib(user.last_login_at)}</td>
                   <td>{user.is_active ? 'Aktif' : 'Nonaktif'}</td>
                   <td style={{ textAlign: 'right' }}>
                     <button
@@ -215,17 +215,24 @@ export function AuditPanel() {
           <ScrollText size={18} color="var(--teal)" />
           <span>Log Audit</span>
         </div>
-        <div style={{ display: 'flex', gap: '8px' }}>
-          <input className="search-box" placeholder="Filter jenis aksi, mis. LOGIN_FAILED" value={filter} onChange={(event) => setFilter(event.target.value)} style={{ minWidth: '240px' }} />
-          <button type="button" className="action-pill-btn secondary" onClick={() => load(filter.trim())}>Terapkan</button>
-        </div>
+        <form className="audit-filter" role="search" onSubmit={(event) => { event.preventDefault(); load(filter.trim()); }}>
+          <input className="search-box" aria-label="Filter jenis aksi" placeholder="Filter jenis aksi, mis. LOGIN_FAILED" value={filter} onChange={(event) => setFilter(event.target.value)} />
+          {filter && (
+            <button type="button" className="action-pill-btn secondary audit-filter-btn" aria-label="Hapus filter" onClick={() => { setFilter(''); load(''); }}>
+              <X size={14} />
+            </button>
+          )}
+          <button type="submit" className="action-pill-btn primary audit-filter-btn">
+            <Search size={14} /> Cari
+          </button>
+        </form>
       </div>
       {loadError && <p role="alert" style={{ color: '#DC2626', fontSize: '0.8rem' }}>{loadError}</p>}
       <div className="casa-table-wrap">
         <table className="casa-table">
           <thead>
             <tr>
-              <th>Waktu</th>
+              <th>Waktu (WIB)</th>
               <th>Pelaku</th>
               <th>Aksi</th>
               <th>Keterangan</th>
@@ -236,7 +243,7 @@ export function AuditPanel() {
             {logs.length === 0 && <tr><td colSpan={5}>Belum ada catatan.</td></tr>}
             {logs.map((log) => (
               <tr key={log.id}>
-                <td style={{ whiteSpace: 'nowrap' }}>{fmtTime(log.created_at)}</td>
+                <td style={{ whiteSpace: 'nowrap' }}>{formatWib(log.created_at)}</td>
                 <td>{log.actor_email || '—'}<div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>{log.actor_role || ''}</div></td>
                 <td>{log.action_type}</td>
                 <td>{log.description}</td>

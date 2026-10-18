@@ -35,12 +35,21 @@ class TrackSeed(BaseModel):
     box_id: str = Field(min_length=1, max_length=80, pattern=r"^[a-zA-Z0-9_-]+$")
 
 
+class DeletionSeed(BaseModel):
+    """Kotak yang baru dihapus analis pada satu frame; server mencari objek yang sama di frame lain lalu menghapusnya juga."""
+    model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
+    frame: int = Field(ge=0, strict=True)
+    box: tuple[float, float, float, float]
+    label: Literal["sperm", "excluded"] = "sperm"
+
+
 class CorrectionRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     revision: int = Field(ge=0, strict=True)
     reason: str = Field(min_length=3, max_length=1000)
     frames: list[EditedFrame] = Field(min_length=1, max_length=50000)
     tracks: list[TrackSeed] = Field(default_factory=list, max_length=50000)
+    deletions: list[DeletionSeed] = Field(default_factory=list, max_length=50000)
 
 
 TRACK_MATCH_THRESHOLD = 0.6
@@ -159,7 +168,60 @@ def propagate_tracks(reader, frames_by_index, overrides, frame_count, seeds):
     return summary
 
 
+def _delete_direction(reader, frames_by_index, overrides, frame_count, seed_frame, step, template, center):
+    """Mengikuti objek yang dihapus ke satu arah dan membuang kotak yang menutupinya. Aturan pencocokan dan jeda sama dengan pelacakan kotak baru."""
+    removed, gap = [], 0
+    frame = seed_frame + step
+    while 0 <= frame < frame_count:
+        if frame not in frames_by_index:
+            break
+        box = _match(reader.gray(frame), template, center)
+        if box is None:
+            gap += 1
+            if gap > TRACK_MAX_GAP:
+                break
+        else:
+            gap = 0
+            boxes = overrides.get(str(frame), frames_by_index[frame])
+            candidates = [item for item in boxes if box_iou(box, item["box"]) >= TRACK_SNAP_IOU]
+            if candidates:
+                best = max(candidates, key=lambda item: box_iou(box, item["box"]))
+                overrides[str(frame)] = [item for item in boxes if item["id"] != best["id"]]
+                removed.append(frame)
+            center = ((box[0] + box[2]) / 2, (box[1] + box[3]) / 2)
+        frame += step
+    return removed
+
+
+def propagate_deletions(reader, frames_by_index, overrides, frame_count, seeds):
+    """Hapus kotak yang sama di frame sebelum dan sesudah frame tempat analis menghapusnya (pencocokan tampilan)."""
+    summary = []
+    for seed in seeds:
+        if seed.frame >= frame_count or seed.frame not in frames_by_index:
+            raise ValueError("Nomor frame untuk penghapusan tidak valid.")
+        left, top, right, bottom = [int(round(value)) for value in seed.box]
+        gray = reader.gray(seed.frame)
+        template = gray[max(0, top):min(reader.height, bottom), max(0, left):min(reader.width, right)]
+        if template.size == 0 or float(np.std(template)) < 3:
+            summary.append({"kind": "delete", "label": seed.label, "tracked": False, "start_frame": seed.frame, "end_frame": seed.frame, "linked_frames": 0})
+            continue
+        center = ((left + right) / 2, (top + bottom) / 2)
+        backward = _delete_direction(reader, frames_by_index, overrides, frame_count, seed.frame, -1, template, center)
+        forward = _delete_direction(reader, frames_by_index, overrides, frame_count, seed.frame, 1, template, center)
+        frames = backward + forward
+        summary.append({
+            "kind": "delete", "label": seed.label, "tracked": True,
+            "start_frame": min(frames, default=seed.frame), "end_frame": max(frames, default=seed.frame),
+            "linked_frames": len(frames),
+        })
+    return summary
+
+
 def validate_frames(request, width, height, frame_count, is_image):
+    for seed in request.deletions:
+        left, top, right, bottom = seed.box
+        if seed.frame >= frame_count or not (0 <= left < right <= width and 0 <= top < bottom <= height):
+            raise ValueError("Penghapusan harus menunjuk frame dan kotak yang valid.")
     frame_ids = set()
     for frame in request.frames:
         if frame.frame >= frame_count or frame.frame in frame_ids:

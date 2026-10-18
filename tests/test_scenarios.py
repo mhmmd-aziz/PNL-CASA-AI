@@ -232,6 +232,13 @@ class ScenarioBase(unittest.TestCase):
     def audit_actions(self) -> list[str]:
         return [row[0] for row in self.db().execute("SELECT action_type FROM audit_logs ORDER BY id")]
 
+    def audit_rows(self, action: str | None = None):
+        sql = ("SELECT action_type, description, actor_email, actor_role, target_type, target_id, before_state, "
+               "after_state, result, error_message FROM audit_logs")
+        if action:
+            return self.db().execute(sql + " WHERE action_type = ? ORDER BY id", (action,)).fetchall()
+        return self.db().execute(sql + " ORDER BY id").fetchall()
+
     def ready_for_review(self, **kwargs) -> int:
         exam_id = self.registered(**kwargs)["id"]
         self.assertEqual(self.receive(exam_id).status_code, 200)
@@ -304,7 +311,8 @@ class PositiveScenarios(ScenarioBase):
         self.assertEqual(reports[0]["physician_license"], "SIP-UJI-001")
 
         actions = self.audit_actions()
-        for action in ["REGISTER_EXAMINATION", "RECEIVE_SAMPLE", "SUBMIT_FOR_REVIEW", "PHYSICIAN_APPROVE", "RELEASE_REPORT"]:
+        for action in ["REGISTER_EXAMINATION", "RECEIVE_SAMPLE", "UPDATE_MACROSCOPIC", "UPLOAD_MEDIA", "RUN_ANALYSIS",
+                       "SUBMIT_FOR_REVIEW", "PHYSICIAN_APPROVE", "RELEASE_REPORT"]:
             self.assertIn(action, actions)
         events = [row[0] for row in self.db().execute("SELECT event_type FROM review_events WHERE examination_id = ? ORDER BY id", (exam_id,))]
         self.assertEqual(events, ["SUBMIT_FOR_REVIEW", "PHYSICIAN_APPROVE"])
@@ -375,6 +383,21 @@ class PositiveScenarios(ScenarioBase):
         genders = {row[0] for row in self.db().execute("SELECT gender FROM patients")}
         self.assertEqual(genders, {"MALE"})
         self.assertTrue(exam["id"])
+
+    def test_p9_physician_gets_patient_advice_and_reviewer_notes_separately(self):
+        exam_id = self.ready_for_review()
+        response = self.client.get(f"/api/review/{exam_id}/interpretation", headers=self.auth("dokter@lab.test"))
+        self.assertEqual(response.status_code, 200, response.text)
+        body = response.json()
+        patient_text = " ".join(body["recommendations"]).lower()
+        reviewer_text = " ".join(body["review_notes"]).lower()
+        self.assertIn("bukan diagnosis", body["recommendations"][-1])
+        for technical in ("kalibrasi", "heatmap", "anotasi", "tracking"):
+            self.assertNotIn(technical, patient_text)
+        self.assertIn("kalibrasi", reviewer_text)
+        self.assertIn("kondisi klinis pasien", reviewer_text)
+        # hanya dokter yang melihat saran ini; pasien dan peran lain ditolak
+        self.assertEqual(self.client.get(f"/api/review/{exam_id}/interpretation", headers=self.auth("analis@lab.test")).status_code, 403)
 
     def test_p5_existing_patient_registered_again_by_medical_record_number(self):
         first = self.registered()
@@ -696,6 +719,103 @@ class EdgeCaseScenarios(ScenarioBase):
         response = self.client.patch(f"/api/admin/users/{self.users['admin@lab.test']}", json={"is_active": False}, headers=admin)
         self.assertEqual(response.status_code, 409)
 
+
+
+# =============================================================================
+# Jejak audit: setiap tindakan penting harus tercatat dan terlihat oleh Super Admin
+# =============================================================================
+
+class AuditScenarios(ScenarioBase):
+    def prepared(self) -> int:
+        exam_id = self.registered()["id"]
+        self.receive(exam_id)
+        self.macroscopic(exam_id)
+        return exam_id
+
+    def test_a1_upload_and_analysis_are_audited_and_visible_to_super_admin(self):
+        exam_id = self.prepared()
+        _, progress = self.analyze(exam_id)
+        self.assertTrue(progress.json()["result"]["success"])
+        run = self.audit_rows("RUN_ANALYSIS")[0]
+        self.assertEqual((run["target_type"], run["target_id"], run["result"]), ("examination", exam_id, "SUCCESS"))
+        after = json.loads(run["after_state"])
+        self.assertIsNotNone(after["run_id"])
+        self.assertEqual(after["model"], "best.pt")
+        self.assertIn("pixel_scale", after["calibration"])
+        upload = json.loads(self.audit_rows("UPLOAD_MEDIA")[0]["after_state"])
+        self.assertEqual((upload["extension"], upload["size_bytes"] > 0), (".mp4", True))
+
+        listed = self.client.get("/api/admin/audit-logs?limit=200", headers=self.auth("admin@lab.test")).json()
+        for action in ["UPLOAD_MEDIA", "RUN_ANALYSIS", "UPDATE_MACROSCOPIC"]:
+            self.assertIn(action, [item["action_type"] for item in listed])
+        self.assertEqual({item["actor_email"] for item in listed if item["action_type"] == "RUN_ANALYSIS"}, {"analis@lab.test"})
+
+    def test_a2_failed_analysis_is_audited_as_failure(self):
+        exam_id = self.prepared()
+        self.pipeline_error = RuntimeError("Video tidak dapat didekode")
+        self.analyze(exam_id)
+        run = self.audit_rows("RUN_ANALYSIS")[0]
+        self.assertEqual(run["result"], "FAILURE")
+        self.assertIn("didekode", run["error_message"])
+        self.assertIsNone(json.loads(run["after_state"])["run_id"])
+
+    def test_a3_calibration_change_records_before_and_after(self):
+        admin = self.auth("admin@lab.test")
+        profile = self.client.get("/api/calibration", headers=admin).json()
+        changed = {**profile, "pixel_scale": 0.65, "chamber_type": "leja", "chamber_depth": 20, "dilution_factor": 2}
+        self.assertEqual(self.client.put("/api/calibration", json=changed, headers=admin).status_code, 200)
+        row = self.audit_rows("UPDATE_CALIBRATION")[0]
+        self.assertEqual((row["actor_email"], row["actor_role"]), ("admin@lab.test", "SUPER_ADMIN"))
+        before, after = json.loads(row["before_state"]), json.loads(row["after_state"])
+        self.assertEqual((after["pixel_scale"], after["dilution_factor"]), (0.65, 2))
+        self.assertNotEqual(before["pixel_scale"], 0.65)
+        self.assertIn("pixel_scale", row["description"])
+        # permintaan yang ditolak validasi tidak meninggalkan catatan perubahan
+        self.assertEqual(self.client.put("/api/calibration", json={**changed, "pixel_scale": 0}, headers=admin).status_code, 422)
+        self.assertEqual(len(self.audit_rows("UPDATE_CALIBRATION")), 1)
+
+    def test_a4_macroscopic_update_records_structured_changes_but_not_free_text(self):
+        exam_id = self.registered()["id"]
+        self.receive(exam_id)
+        text = {"appearance": "TEKS-BEBAS-RAHASIA", "macroscopic_notes": "catatan-pribadi-pasien"}
+        self.macroscopic(exam_id, volume_ml=2.0, **text)
+        self.macroscopic(exam_id, volume_ml=3.0, **text)
+        first, second = self.audit_rows("UPDATE_MACROSCOPIC")
+        self.assertEqual(json.loads(second["before_state"]), {"volume_ml": 2.0})
+        self.assertEqual(json.loads(second["after_state"]), {"volume_ml": 3.0})
+        self.assertIn("volume_ml", second["description"])
+        self.assertNotIn("appearance", second["description"])
+        self.assertIn("appearance", first["description"])
+        blob = json.dumps([tuple(row) for row in self.audit_rows()])
+        self.assertNotIn("TEKS-BEBAS-RAHASIA", blob)
+        self.assertNotIn("catatan-pribadi-pasien", blob)
+
+    def test_a5_client_filename_never_reaches_the_audit_log(self):
+        exam_id = self.prepared()
+        response = self.client.post(
+            "/api/analyze", files={"video": ("Budi_Santoso_RM-000123.mp4", b"x")},
+            data={"examination_id": str(exam_id)}, headers=self.auth("analis@lab.test"),
+        )
+        self.assertEqual(response.status_code, 200)
+        blob = json.dumps([tuple(row) for row in self.audit_rows()])
+        self.assertNotIn("Budi", blob)
+        self.assertNotIn("Santoso", blob)
+        self.assertNotIn("000123", blob)
+
+    def test_a6_image_analysis_is_audited_as_success_and_failure(self):
+        headers = self.auth("analis@lab.test")
+        with patch.object(main, "analyze_single_image", return_value=({"summary": {}}, "hasil.jpg")):
+            response = self.client.post("/api/analyze_image", files={"image": ("foto-pasien.jpg", b"x")}, headers=headers)
+        self.assertEqual(response.status_code, 200, response.text)
+        with patch.object(main, "analyze_single_image", side_effect=ValueError("Model tanpa label sperma")):
+            response = self.client.post("/api/analyze_image", files={"image": ("lain.jpg", b"x")}, headers=headers)
+        self.assertEqual(response.status_code, 422)
+        rows = [row for row in self.audit_rows() if row["action_type"] in ("UPLOAD_MEDIA", "RUN_ANALYSIS")]
+        self.assertEqual([(row["action_type"], row["result"]) for row in rows],
+                         [("UPLOAD_MEDIA", "SUCCESS"), ("RUN_ANALYSIS", "SUCCESS"), ("UPLOAD_MEDIA", "SUCCESS"), ("RUN_ANALYSIS", "FAILURE")])
+        self.assertEqual({row["target_type"] for row in rows}, {"analysis"})
+        self.assertIn("label sperma", rows[-1]["error_message"])
+        self.assertNotIn("foto-pasien", json.dumps([tuple(row) for row in rows]))
 
 
 # =============================================================================

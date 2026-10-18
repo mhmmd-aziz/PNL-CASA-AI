@@ -14,7 +14,7 @@ Dokumen ini mencatat apa yang sudah dibangun, bagaimana sistem bekerja, dan apa 
 | Aplikasi web lima peran (Front Office, Analis, Dokter, Pasien, Super Admin) | Berjalan |
 | Alur registrasi sampai laporan dirilis | Berjalan, diuji otomatis |
 | Koreksi deteksi oleh analis | Berjalan |
-| Pengujian positif, negatif, edge case | 36 tes skenario, lihat [TESTING.md](TESTING.md) |
+| Pengujian positif, negatif, edge case | 42 tes skenario, lihat [TESTING.md](TESTING.md) |
 
 ## 2. Arsitektur sistem
 
@@ -160,12 +160,14 @@ flowchart LR
 - Registrasi pasien dengan nomor rekam medis otomatis dan akun portal pasien. Jenis kelamin diisi otomatis, dan pasien yang salah didaftarkan dapat dihapus selama sampelnya belum diterima laboratorium.
 - Jadwal per slot 15 menit (maksimal 4 pasien per slot), pemeriksaan masa pantang 2–7 hari, dan peringatan jadwal ganda di hari yang sama.
 - Label sampel dengan barcode dan QR, kartu jadwal pasien berisi masa pantang dan petunjuk, serta pemindai QR untuk Front Office.
-- Editor koreksi deteksi per frame dengan pratinjau dan riwayat revisi.
+- Editor koreksi deteksi per frame dengan pratinjau dan riwayat revisi. Kotak yang ditambahkan maupun dihapus dilacak ke frame sebelum dan sesudahnya, dan satu kali Undo membatalkan sekaligus.
 - Tanda tangan dokter berupa gambar, wajib disertai nomor SIP, dan laporan terkunci setelah dirilis.
+- Rekomendasi pada laporan berisi saran praktis untuk pasien yang disesuaikan dengan temuan (gaya hidup, pemeriksaan ulang, konsultasi), terpisah dari catatan teknis untuk peninjau.
 - Draf interpretasi dari LLM untuk dokter. Fitur ini opsional, hanya aktif jika server dikonfigurasi, dan setiap pemakaiannya dicatat di log audit.
 - Dashboard operasional Super Admin dengan ekspor PDF dan Excel tanpa nama pasien.
 - Keamanan: kata sandi PBKDF2, token sesi disimpan sebagai hash, tautan berkas bertanda tangan yang berlaku 15 menit, dan log audit.
 - Analisis gambar tunggal untuk hitung sel (tanpa motilitas).
+- Model 3D interaktif di landing page yang menjelaskan perangkat, tahap analisis, review analis, dan laporan dokter, termasuk model anatomi sel sperma (berkas GLB) yang berputar dengan ekor bergelombang. Layarnya berisi simulasi dengan ambang yang sama dengan aplikasi, dan teksnya dijaga oleh tes agar tidak memuat klaim di luar fitur yang ada.
 
 ### Belum dikerjakan
 
@@ -204,7 +206,7 @@ Pengujian otomatis mencakup tiga skenario sesuai ketentuan. Ringkasannya di bawa
 | Negatif | Login salah, akses lintas peran, input tidak valid, urutan alur dilompati, pipeline gagal, dan bobot model hilang |
 | Edge case | Nilai batas makroskopis dan masa pantang, slot penuh, dua analis pada satu sampel, laporan yang sudah dirilis, dan isolasi data antarpasien |
 
-Hasil terakhir: 124 tes Python OK dan 31 tes frontend lulus. Dua kekurangan yang ditemukan dan belum diperbaiki:
+Hasil terakhir: 157 tes Python OK dan 46 tes frontend lulus. Dua kekurangan yang ditemukan dan belum diperbaiki:
 
 1. Upload belum memvalidasi tipe dan ukuran berkas.
 2. Jika pendaftaran sesi koreksi gagal setelah hasil analisis tersimpan, hasil tersebut masih bisa dikirim ke dokter.

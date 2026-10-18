@@ -639,7 +639,12 @@ def update_macroscopic(examination_id: int, payload: MacroscopicUpdate, user: di
     """Analis mengisi data makroskopis sampel yang sedang ia tangani."""
     conn = get_connection()
     row = conn.execute(
-        "SELECT status, current_analyst_id FROM examinations WHERE id = ?", (examination_id,)
+        """
+        SELECT status, current_analyst_id, sample_code, volume_ml, liquefaction_time_min, viscosity, ph_value,
+               appearance, macroscopic_notes
+        FROM examinations WHERE id = ?
+        """,
+        (examination_id,),
     ).fetchone()
     if row is None:
         raise HTTPException(status_code=404, detail="Pemeriksaan tidak ditemukan.")
@@ -647,6 +652,8 @@ def update_macroscopic(examination_id: int, payload: MacroscopicUpdate, user: di
         raise HTTPException(status_code=409, detail="Terima sampel ini terlebih dahulu untuk mengisi data makroskopis.")
 
     values = payload.model_dump()
+    values["appearance"] = values["appearance"].strip() if values["appearance"] else None
+    values["macroscopic_notes"] = values["macroscopic_notes"].strip() if values["macroscopic_notes"] else None
     conn.execute(
         """
         UPDATE examinations
@@ -659,12 +666,26 @@ def update_macroscopic(examination_id: int, payload: MacroscopicUpdate, user: di
             values["liquefaction_time_min"],
             values["viscosity"],
             values["ph_value"],
-            values["appearance"].strip() if values["appearance"] else None,
-            values["macroscopic_notes"].strip() if values["macroscopic_notes"] else None,
+            values["appearance"],
+            values["macroscopic_notes"],
             examination_id,
         ),
     )
     conn.commit()
+    # Catatan audit memuat nama kolom yang berubah; nilai angka/pilihan disalin, teks bebas tidak
+    changed = [key for key in values if key in row.keys() and row[key] != values[key]]
+    structured = ("volume_ml", "liquefaction_time_min", "viscosity", "ph_value")
+    log_audit_event(
+        actor_id=user["id"],
+        action_type="UPDATE_MACROSCOPIC",
+        description=f"Data makroskopis sampel {row['sample_code']} disimpan. Kolom berubah: {', '.join(changed) or 'tidak ada'}",
+        target_type="examination",
+        target_id=examination_id,
+        actor_email=user.get("email"),
+        actor_role=user.get("role"),
+        before_state={key: row[key] for key in changed if key in structured} or None,
+        after_state={key: values[key] for key in changed if key in structured} or None,
+    )
     return _examination_detail(conn, examination_id)
 
 

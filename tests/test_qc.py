@@ -138,9 +138,12 @@ class ApiQC(unittest.TestCase):
             patch.object(main, "UPLOAD_DIR", directory),
             patch.object(correction_routes, "STORE_DIR", directory / "corrections"),
             patch.object(main, "register_analysis"),
+            # Pencatatan audit tidak boleh menulis ke database lokal pada tes ini
+            patch.object(main, "log_audit_event"),
         ]
         for item in self.patches:
             item.start()
+        self.audit = main.log_audit_event
         # Endpoint kalibrasi/analisis kini butuh sesi; peran bawaan analis, diganti per tes bila perlu
         self.user = {"id": 1, "email": "analyst@lab.local", "full_name": "Analis", "role": "ANALYST"}
         main.app.dependency_overrides[auth_routes.get_current_user] = lambda: self.user
@@ -158,6 +161,10 @@ class ApiQC(unittest.TestCase):
         profile = self.client.get("/api/calibration").json()
         profile.update(pixel_scale=1.2, chamber_type="makler", chamber_depth=10)
         self.assertEqual(self.client.put("/api/calibration", json=profile).status_code, 200)
+        saved = self.audit.call_args.kwargs
+        self.assertEqual(saved["action_type"], "UPDATE_CALIBRATION")
+        self.assertEqual(saved["after_state"]["pixel_scale"], 1.2)
+        self.assertNotEqual(saved["before_state"]["pixel_scale"], 1.2)
         self.assertEqual(self.client.get("/api/calibration").json(), profile)
         self.assertEqual(json.loads(self.profile.read_text()), profile)
         self.assertEqual(self.client.put("/api/calibration", json={**profile, "pixel_scale": 0}).status_code, 422)
@@ -168,6 +175,8 @@ class ApiQC(unittest.TestCase):
         with patch.object(main, "trained_model_path", return_value="test.pt"), patch.object(main, "analyze_single_image", return_value=({"summary": {}}, "image.jpg")) as analyze:
             response = self.client.post("/api/analyze_image", files={"image": ("sample.jpg", b"test")}, data={"fps": "60", "chamber_depth": "30"})
         self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual([call.kwargs["action_type"] for call in self.audit.call_args_list], ["UPLOAD_MEDIA", "RUN_ANALYSIS"])
+        self.assertNotIn("sample.jpg", str(self.audit.call_args_list))
         settings = analyze.call_args.kwargs["calibration"]
         self.assertEqual(settings.pixel_scale, 1.2)
         self.assertEqual(settings.fps_mode, "manual")

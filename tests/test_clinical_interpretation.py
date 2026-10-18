@@ -113,18 +113,27 @@ class ContextNotesTests(unittest.TestCase):
         data["analysis"]["quality"] = {"frames_analyzed": 5}
         self.assertTrue(any("Durasi analisis pendek" in text for text in self.categories(ci.who_findings(data))))
 
-    def test_single_examination_and_clinical_history_recommendations_always_present(self):
-        recs = ci.who_findings(self.sample())["recommendations"]
-        self.assertTrue(any("Satu pemeriksaan belum cukup" in rec for rec in recs))
-        self.assertTrue(any("kondisi klinis pasien" in rec for rec in recs))
+    def test_clinical_history_note_is_always_for_the_reviewer_not_the_patient(self):
+        findings = ci.who_findings(self.sample())
+        self.assertTrue(any("kondisi klinis pasien" in note for note in findings["review_notes"]))
+        self.assertFalse(any("kondisi klinis pasien" in rec for rec in findings["recommendations"]))
 
-    def test_media_review_recommendation_only_when_media_exists(self):
-        without = ci.who_findings(self.sample())["recommendations"]
+    def test_media_review_note_only_when_media_exists(self):
+        without = ci.who_findings(self.sample())["review_notes"]
         data = self.sample()
         data["analysis"]["video_url"] = "https://example.invalid/video"
-        with_media = ci.who_findings(data)["recommendations"]
-        self.assertFalse(any("video anotasi" in rec for rec in without))
-        self.assertTrue(any("video anotasi" in rec for rec in with_media))
+        with_media = ci.who_findings(data)["review_notes"]
+        self.assertFalse(any("video anotasi" in note for note in without))
+        self.assertTrue(any("video anotasi" in note for note in with_media))
+
+    def test_technical_notes_go_to_reviewers_only(self):
+        data = self.sample()
+        data["analysis"].update({"video_url": "https://example.invalid/video", "manual_correction": {"changed_frames": [1]}})
+        data["analysis"]["quality"] = {"frames_analyzed": 120, "tracking_assignment_percent": 60}
+        findings = ci.who_findings(data)
+        notes = " ".join(findings["review_notes"])
+        for expected in ("kalibrasi", "tracking", "koreksi manual", "video anotasi"):
+            self.assertIn(expected, notes)
 
     def test_ai_payload_includes_context_notes_with_sources(self):
         findings = ci.who_findings(self.sample(abstinence_duration_hours=24))
@@ -138,6 +147,87 @@ class ContextNotesTests(unittest.TestCase):
         data.pop("abstinence_duration_hours")
         payload = ci._ai_payload(ci.who_findings(data))
         self.assertIn("lama pantang tidak tercatat", payload)
+
+
+class PatientRecommendationTests(unittest.TestCase):
+    """Rekomendasi pada laporan dibaca pasien: saran praktis sesuai temuan, bukan catatan teknis untuk peninjau."""
+
+    DOCTOR_TERMS = ("kalibrasi", "tracking", "heatmap", "anotasi", "koreksi manual", "analis", "id lintasan", "sistem ini", "frame")
+    FORBIDDEN = ("mandul", "infertil", "dosis", "resep", "tablet", "kapsul", "vitamin", "zinc", "klomifen", "hormon tambahan")
+
+    def recs(self, hours=72, **overrides):
+        data = detail(**overrides)
+        data["abstinence_duration_hours"] = hours
+        return ci.who_findings(data)["recommendations"]
+
+    def text(self, recs):
+        return " ".join(recs)
+
+    def test_low_concentration_gets_lifestyle_advice_retest_and_consultation(self):
+        text = self.text(self.recs(concentration=5.0))
+        self.assertIn("Jumlah sperma di bawah batas acuan", text)
+        for expected in ("merokok", "alkohol", "panas berlebih", "berat badan", "pemeriksaan ulang", "3 bulan", "urologi atau andrologi"):
+            self.assertIn(expected, text)
+        self.assertNotIn("Gerak sperma di bawah batas acuan", text)
+        self.assertNotIn("Volume sampel di bawah batas acuan", text)
+
+    def test_low_motility_is_called_out_separately(self):
+        text = self.text(self.recs(pr=10.0, np_=10.0))
+        self.assertIn("Gerak sperma di bawah batas acuan", text)
+        self.assertIn("kencing manis", text)
+        self.assertNotIn("Jumlah sperma di bawah batas acuan", text)
+        self.assertIn("pemeriksaan ulang", text)
+
+    def test_low_volume_explains_collection(self):
+        text = self.text(self.recs(volume=1.0))
+        self.assertIn("Volume sampel di bawah batas acuan", text)
+        self.assertIn("tertampung ke wadah", text)
+
+    def test_all_within_reference_keeps_advice_short_and_reassuring(self):
+        recs = self.recs()
+        text = self.text(recs)
+        self.assertIn("dalam rentang batas acuan", text)
+        self.assertIn("12 bulan", text)
+        self.assertNotIn("pemeriksaan ulang", text)
+        self.assertNotIn("urologi", text)
+        self.assertLessEqual(len(recs), 5)
+
+    def test_short_abstinence_adds_collection_instruction(self):
+        self.assertIn("di luar 2–7 hari", self.text(self.recs(hours=24)))
+        self.assertNotIn("di luar 2–7 hari", self.text(self.recs(hours=72)))
+
+    def test_unavailable_results_get_only_generic_lines(self):
+        recs = self.recs(volume=None, concentration=None, pr=None, np_=None)
+        self.assertEqual(len(recs), 2)
+        self.assertIn("bersifat umum", recs[0])
+        self.assertIn("bukan diagnosis", recs[-1])
+
+    def test_every_variant_ends_with_the_physician_decides_statement(self):
+        for kwargs in ({}, {"concentration": 5.0}, {"pr": 5.0, "np_": 5.0, "volume": 1.0}, {"volume": None, "concentration": None}):
+            with self.subTest(kwargs=kwargs):
+                self.assertIn("bukan diagnosis", self.recs(**kwargs)[-1])
+                self.assertIn("dokter", self.recs(**kwargs)[-1])
+
+    def test_patient_text_has_no_technical_terms_prescriptions_or_verdicts(self):
+        scenarios = [{}, {"concentration": 5.0}, {"pr": 5.0, "np_": 5.0}, {"volume": 1.0}, {"concentration": 5.0, "pr": 5.0, "np_": 5.0, "volume": 1.0}]
+        for kwargs in scenarios:
+            for hours in (24, 72):
+                text = self.text(self.recs(hours=hours, **kwargs)).lower()
+                for term in self.DOCTOR_TERMS + self.FORBIDDEN:
+                    self.assertNotIn(term, text, f"{term!r} muncul pada {kwargs} hours={hours}")
+
+    def test_worst_case_fits_the_report_recommendation_field(self):
+        recs = self.recs(hours=24, concentration=5.0, pr=5.0, np_=5.0, volume=1.0)
+        numbered = "\n".join(f"{index}. {item}" for index, item in enumerate(recs, 1))
+        self.assertLessEqual(len(numbered), 1800)
+        self.assertEqual(len(recs), len(set(recs)))
+
+    def test_ai_prompt_asks_for_patient_advice_without_technical_notes(self):
+        prompt = ci.SYSTEM_PROMPT
+        self.assertIn("saran praktis untuk pasien", prompt)
+        self.assertIn("tidak boleh masuk ke bagian ini", prompt)
+        self.assertIn("Jangan menyebut obat, suplemen, dosis, atau terapi", prompt)
+
 
 
 class SystemPromptTests(unittest.TestCase):

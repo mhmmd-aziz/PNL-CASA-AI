@@ -120,7 +120,8 @@ def who_findings(detail: dict) -> dict:
             "has_media": has_media,
         },
         "summary_text": _summary_text(findings, pattern_notes + [note["text"] for note in context_notes]),
-        "recommendations": _rule_recommendations(values, quality, analysis.get("manual_correction"), has_media),
+        "recommendations": _patient_recommendations(values, detail.get("abstinence_duration_hours")),
+        "review_notes": _review_notes(values, quality, analysis.get("manual_correction"), has_media),
         "disclaimer": "Estimasi berbantuan AI untuk pembanding WHO. Bukan diagnosis; wajib ditinjau dokter penanggung jawab.",
     }
 
@@ -181,29 +182,66 @@ def _context_notes(detail: dict, quality: dict) -> list:
     return notes
 
 
-def _rule_recommendations(values: dict, quality: dict, manual_correction, has_media: bool = False) -> list:
-    recs = []
-    below_reference = [
-        values[key] is not None and values[key] < WHO_LOWER_LIMITS[key][0]
-        for key in ("concentration_million_ml", "progressive_motility_percent")
+def _below(values: dict, key: str) -> bool:
+    return values[key] is not None and values[key] < WHO_LOWER_LIMITS[key][0]
+
+
+def _patient_recommendations(values: dict, abstinence_hours) -> list:
+    """Saran untuk pasien (masuk ke kolom Rekomendasi pada laporan).
+
+    Saran bersifat umum dan disesuaikan dengan parameter yang berada di bawah batas acuan. Bukan diagnosis,
+    resep, dosis, atau terapi; dokter menyesuaikannya dengan riwayat pasien sebelum laporan disetujui.
+    """
+    low_count = _below(values, "concentration_million_ml") or _below(values, "total_number_million")
+    low_motility = _below(values, "progressive_motility_percent") or _below(values, "total_motility_percent")
+    low_volume = _below(values, "volume_ml")
+    any_low = low_count or low_motility or low_volume
+    measured = [
+        key for key in ("volume_ml", "concentration_million_ml", "total_number_million", "total_motility_percent", "progressive_motility_percent")
+        if values[key] is not None
     ]
-    if any(below_reference):
-        recs.append("Konfirmasi dengan pemeriksaan ulang sesuai prosedur WHO (dua sampel, selang pantang 2–7 hari) sebelum menyimpulkan.")
+    hours = _number(abstinence_hours)
+
+    recs = ["Saran ini bersifat umum dan belum disesuaikan dengan riwayat kesehatan Anda; diskusikan dengan dokter."]
+    if low_count:
+        recs.append("Jumlah sperma di bawah batas acuan. Dokter dapat memeriksa penyebabnya, misalnya infeksi, varikokel (pelebaran pembuluh darah di kantung zakar), atau gangguan hormon.")
+    if low_motility:
+        recs.append("Gerak sperma di bawah batas acuan. Penyakit yang belum terkontrol (misalnya kencing manis) atau demam tinggi baru-baru ini dapat memengaruhi hasil; sampaikan ke dokter.")
+    if low_volume:
+        recs.append("Volume sampel di bawah batas acuan. Pastikan seluruh cairan tertampung ke wadah saat pengambilan sampel; sampaikan ke petugas jika ada yang tumpah.")
+    if any_low:
+        recs.append("Satu pemeriksaan belum cukup untuk menyimpulkan. Disarankan pemeriksaan ulang (WHO menganjurkan dua sampel) dengan pantang 2–7 hari sebelum tiap pengambilan; setelah memperbaiki gaya hidup, umumnya sekitar 3 bulan kemudian. Dokter menentukan waktunya.")
+        recs.append("Berhenti merokok dan hindari asap rokok; batasi atau hentikan alkohol.")
+        recs.append("Jaga berat badan ideal, olahraga teratur dengan intensitas sedang, tidur cukup, kelola stres, dan makan bergizi seimbang (sayur, buah, kacang-kacangan, ikan).")
+        recs.append("Hindari panas berlebih pada area testis (berendam air panas atau sauna lama) dan celana yang terlalu ketat.")
+        recs.append("Jangan memakai steroid anabolik, dan jangan menghentikan obat rutin tanpa bertanya ke dokter. Beri tahu dokter semua obat dan suplemen yang Anda pakai.")
+        recs.append("Konsultasikan hasil ini ke dokter (urologi atau andrologi) untuk pemeriksaan lanjutan.")
+    elif measured:
+        recs.append("Parameter yang terukur berada dalam rentang batas acuan. Pertahankan gaya hidup sehat: tidak merokok, batasi alkohol, olahraga teratur, dan makan bergizi seimbang.")
+        recs.append("Hasil ini bukan jaminan kesuburan. Jika setelah 12 bulan berusaha kehamilan belum terjadi, konsultasikan ke dokter.")
+    if hours is not None and (hours < ABSTINENCE_MIN_HOURS or hours > ABSTINENCE_MAX_HOURS):
+        recs.append("Lama pantang pada pemeriksaan ini di luar 2–7 hari sehingga hasil dapat terpengaruh. Pada pengambilan berikutnya, tahan ejakulasi 2–7 hari sebelum sampel diambil.")
+    recs.append("Hasil ini estimasi berbantuan AI dan bukan diagnosis; keputusan dan tindak lanjut ditentukan oleh dokter Anda.")
+    return recs
+
+
+def _review_notes(values: dict, quality: dict, manual_correction, has_media: bool = False) -> list:
+    """Catatan untuk analis dan dokter peninjau. Tidak ikut ke laporan pasien."""
+    notes = ["Saran untuk pasien dibuat otomatis dari angka hasil dan bersifat umum; sesuaikan dengan riwayat pasien sebelum menyetujui."]
     if values["volume_ml"] is None:
-        recs.append("Isi data volume sampel agar jumlah total dapat dihitung.")
+        notes.append("Isi data volume sampel agar jumlah total dapat dihitung.")
     if values["progressive_motility_percent"] is not None:
-        recs.append("Periksa kalibrasi (skala µm/px, FPS, kedalaman bilik) sebelum menafsirkan PR.")
+        notes.append("Periksa kalibrasi (skala µm/px, FPS, kedalaman bilik) sebelum menafsirkan PR.")
     tracked = quality.get("tracking_assignment_percent")
     if tracked is not None and tracked < 90:
-        recs.append("Persentase deteksi yang mendapat ID lintasan rendah; tinjau kualitas tracking.")
+        notes.append("Persentase deteksi yang mendapat ID lintasan rendah; tinjau kualitas tracking.")
     if manual_correction:
-        recs.append("Hasil memuat koreksi manual analis; cantumkan jumlah koreksi pada laporan.")
+        notes.append("Hasil memuat koreksi manual analis; cantumkan jumlah koreksi pada laporan.")
     if has_media:
-        recs.append("Tinjau video anotasi dan heatmap sebelum menyetujui; pastikan deteksi yang tampak sesuai angka.")
-    recs.append("Satu pemeriksaan belum cukup untuk menetapkan subur atau tidak subur; pertimbangkan pemeriksaan ulang sesuai prosedur WHO.")
-    recs.append("Riwayat dan kondisi klinis pasien tidak tercatat di sistem ini; padukan dengan penilaian klinis dokter.")
-    recs.append("Keputusan klinis dan tindak lanjut ada pada dokter penanggung jawab.")
-    return recs
+        notes.append("Tinjau video anotasi dan heatmap sebelum menyetujui; pastikan deteksi yang tampak sesuai angka.")
+    notes.append("Riwayat dan kondisi klinis pasien tidak tercatat di sistem ini; padukan dengan penilaian klinis dokter.")
+    notes.append("Keputusan klinis dan tindak lanjut ada pada dokter penanggung jawab.")
+    return notes
 
 
 def ai_configured() -> bool:
@@ -233,7 +271,7 @@ SYSTEM_PROMPT = (
     "Sebutkan bahwa ini estimasi AI yang wajib ditinjau dokter penanggung jawab. Format jawaban: baris 'INTERPRETASI:' "
     "lalu teks; baris 'SUMBER ACUAN:' berisi versi acuan WHO yang dipakai; baris 'KESIMPULAN PASIEN:' berisi 3 sampai 5 "
     "kalimat berbahasa awam tentang apa yang ditemukan dan langkah berikutnya, tanpa istilah teknis berlebihan dan tanpa "
-    "kata diagnosis; lalu baris 'REKOMENDASI:' dengan maksimal lima poin. Tulis teks polos tanpa markdown: jangan memakai tanda bintang, pagar, atau backtick. "
+    "kata diagnosis; lalu baris 'REKOMENDASI:' dengan maksimal lima poin saran praktis untuk pasien dalam bahasa awam, disesuaikan dengan temuan (misalnya jika jumlah atau gerak sperma di bawah batas acuan: berhenti merokok, batasi alkohol, hindari paparan panas pada area testis, jaga berat badan dan pola makan, tidur cukup, pemeriksaan ulang sekitar 3 bulan setelah memperbaiki gaya hidup, dan konsultasi ke dokter; jika semua dalam rentang: pertahankan gaya hidup sehat). Jangan menyebut obat, suplemen, dosis, atau terapi, dan jangan menjanjikan hasil. Catatan teknis untuk dokter (kalibrasi, tracking, koreksi analis) tidak boleh masuk ke bagian ini. Tulis teks polos tanpa markdown: jangan memakai tanda bintang, pagar, atau backtick. "
     "Total jawaban maksimal 1500 karakter."
 )
 
