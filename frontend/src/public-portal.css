@@ -1403,6 +1403,20 @@ html {
   }
 }
 
+/* Varian 3 kartu: kolom sama lebar dan berada di tengah */
+.protocol-grid-3 {
+  grid-template-columns: repeat(3, 1fr);
+  max-width: 900px;
+  margin: 0 auto;
+  text-align: center;
+}
+
+@media (max-width: 760px) {
+  .protocol-grid-3 {
+    grid-template-columns: 1fr;
+  }
+}
+
 .protocol-card {
   background: #F8FAFC;
   border: 1px solid #E2E8F0;

@@ -13,6 +13,21 @@ function qrValue(item) {
   });
 }
 
+// Contoh: Senin, 19 Oktober 2026 pukul 09.00 WIB
+function formatWibLong(value) {
+  if (!value) return '—';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '—';
+  return `${new Intl.DateTimeFormat('id-ID', {
+    timeZone: 'Asia/Jakarta', weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
+    hour: '2-digit', minute: '2-digit', hour12: false,
+  }).format(date)} WIB`;
+}
+
+function formatDays(hours) {
+  return (hours / 24).toLocaleString('id-ID', { maximumFractionDigits: 1 });
+}
+
 // Mencetak dua kartu dalam satu lembar: label wadah sampel dan bukti jadwal pasien.
 export default function LabelPrinter({ item, onDone }) {
   const sampleQrRef = useRef(null);
@@ -46,6 +61,9 @@ export default function LabelPrinter({ item, onDone }) {
   const jadwal = item.collection_datetime
     ? new Date(item.collection_datetime).toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' })
     : '—';
+  const hours = item.abstinence_duration_hours;
+  const hasAbstinence = Boolean(item.abstinence_start_at) && hours != null;
+  const lamaPantang = hours != null ? `${hours} jam (${formatDays(hours)} hari)` : 'Tidak dicatat';
 
   return createPortal((
     <div className="print-label" aria-hidden="true">
@@ -65,18 +83,38 @@ export default function LabelPrinter({ item, onDone }) {
       </article>
 
       <article className="print-label-card patient-label-card">
-        <div className="print-card-heading">BUKTI JADWAL PASIEN</div>
+        <div className="print-card-heading">BUKTI JADWAL PEMERIKSAAN SEMEN</div>
         <div className="print-card-body">
           <canvas ref={patientQrRef} className="print-card-qr" />
-          <div className="print-card-data">
-            <div className="print-sample-code">{item.sample_code}</div>
-            <div><span>Nama</span><strong>{item.patient_name}</strong></div>
-            <div><span>No. RM</span><strong>{item.medical_record_number}</strong></div>
-            <div><span>Jadwal datang</span><strong>{jadwal}</strong></div>
-            <div><span>Nomor antrean</span><strong>{item.queue_number || '—'}</strong></div>
+          <div className="patient-card-columns">
+            <div className="print-card-data">
+              <div className="print-sample-code">{item.sample_code}</div>
+              <div><span>Nama</span><strong>{item.patient_name}</strong></div>
+              <div><span>No. RM</span><strong>{item.medical_record_number}</strong></div>
+              <div><span>Jadwal datang</span><strong>{formatWibLong(item.collection_datetime)}</strong></div>
+              <div><span>Nomor antrean</span><strong>{item.queue_number || '—'}</strong></div>
+            </div>
+            <div className="print-card-data">
+              <div className="print-section-title">Masa pantang</div>
+              <div><span>Mulai pantang</span><strong>{hasAbstinence ? formatWibLong(item.abstinence_start_at) : 'Tidak dicatat'}</strong></div>
+              <div><span>Lama pantang</span><strong>{lamaPantang}</strong></div>
+              <div><span>Boleh diperiksa mulai</span><strong>{item.abstinence_ready_at ? formatWibLong(item.abstinence_ready_at) : 'Tidak dicatat'}</strong></div>
+            </div>
           </div>
         </div>
-        <div className="print-card-note">Simpan dan bawa saat datang • Tunjukkan kepada petugas Front Office</div>
+        <div className="print-card-instructions">
+          <div className="print-section-title">Petunjuk untuk pasien</div>
+          <ol>
+            {hasAbstinence ? (
+              <li>Jangan ejakulasi sejak {formatWibLong(item.abstinence_start_at)} sampai waktu pemeriksaan.</li>
+            ) : (
+              <li>Jangan ejakulasi selama 2 sampai 7 hari sebelum jadwal pemeriksaan.</li>
+            )}
+            <li>Datang sesuai jadwal, bawa kartu ini, lalu tunjukkan kode QR kepada petugas Front Office.</li>
+            <li>Jika terjadi ejakulasi sebelum waktu pemeriksaan atau Anda tidak bisa datang, beri tahu laboratorium agar jadwal diubah. Jadwal hanya bisa diubah sebelum sampel diterima.</li>
+            <li>Akun portal pasien dipakai untuk melihat antrean dan laporan setelah dirilis dokter.</li>
+          </ol>
+        </div>
       </article>
     </div>
   ), document.body);

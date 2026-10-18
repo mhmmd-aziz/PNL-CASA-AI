@@ -1984,7 +1984,7 @@ textarea.search-box:focus {
   }
 
   .print-card-data { min-width: 0; }
-  .print-card-data > div:not(.print-sample-code) {
+  .print-card-data > div:not(.print-sample-code):not(.print-section-title) {
     display: grid;
     grid-template-columns: 14mm 1fr;
     gap: 1mm;
@@ -2000,6 +2000,47 @@ textarea.search-box:focus {
     font-size: 8.2pt;
     font-weight: 900;
     letter-spacing: .02em;
+  }
+  /* Bukti jadwal pasien: selebar halaman agar muat data pantang dan petunjuk */
+  .print-label-card.patient-label-card {
+    grid-column: 1 / -1;
+    width: 180mm;
+    height: auto;
+  }
+  .patient-label-card .print-card-body {
+    grid-template-columns: 32mm 1fr;
+    align-items: start;
+  }
+  .patient-label-card .print-card-qr {
+    width: 32mm !important;
+    height: 32mm !important;
+  }
+  .patient-card-columns {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 4mm;
+  }
+  .patient-label-card .print-card-data > div:not(.print-sample-code):not(.print-section-title) {
+    grid-template-columns: 24mm 1fr;
+    font-size: 8pt;
+  }
+  .print-section-title {
+    margin-bottom: 1mm;
+    font-size: 7.5pt;
+    font-weight: 900;
+    color: #087f78;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+  }
+  .print-card-instructions {
+    padding-top: 2mm;
+    border-top: .3mm solid #d1d5db;
+  }
+  .print-card-instructions ol {
+    margin: 0;
+    padding-left: 4.5mm;
+    font-size: 7.6pt;
+    line-height: 1.4;
   }
   .print-card-note {
     padding-top: 1.3mm;

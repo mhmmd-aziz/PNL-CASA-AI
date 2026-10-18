@@ -19,7 +19,9 @@ os.environ.setdefault("YOLO_CONFIG_DIR", str(ROOT / ".tmp" / "ultralytics"))
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
 import main
+import auth_routes
 import calibration_store
+import correction_routes
 from analysis.calibration import CalibrationSettings
 from analysis.motion import MotionAnalyzer
 from analysis.classifier import MotilityClassifier
@@ -131,18 +133,28 @@ class ApiQC(unittest.TestCase):
         self.directory = tempfile.TemporaryDirectory(dir=ROOT / ".tmp")
         directory = Path(self.directory.name)
         self.profile = directory / "calibration.json"
-        self.patches = [patch.object(calibration_store, "CALIBRATION_PATH", self.profile), patch.object(main, "UPLOAD_DIR", directory)]
+        self.patches = [
+            patch.object(calibration_store, "CALIBRATION_PATH", self.profile),
+            patch.object(main, "UPLOAD_DIR", directory),
+            patch.object(correction_routes, "STORE_DIR", directory / "corrections"),
+            patch.object(main, "register_analysis"),
+        ]
         for item in self.patches:
             item.start()
+        # Endpoint kalibrasi/analisis kini butuh sesi; peran bawaan analis, diganti per tes bila perlu
+        self.user = {"id": 1, "email": "analyst@lab.local", "full_name": "Analis", "role": "ANALYST"}
+        main.app.dependency_overrides[auth_routes.get_current_user] = lambda: self.user
         self.client = TestClient(main.app, raise_server_exceptions=False)
 
     def tearDown(self):
+        main.app.dependency_overrides.pop(auth_routes.get_current_user, None)
         self.client.close()
         for item in reversed(self.patches):
             item.stop()
         self.directory.cleanup()
 
     def test_profile_roundtrip_and_invalid_update_preserves_profile(self):
+        self.user = {**self.user, "role": "SUPER_ADMIN"}
         profile = self.client.get("/api/calibration").json()
         profile.update(pixel_scale=1.2, chamber_type="makler", chamber_depth=10)
         self.assertEqual(self.client.put("/api/calibration", json=profile).status_code, 200)

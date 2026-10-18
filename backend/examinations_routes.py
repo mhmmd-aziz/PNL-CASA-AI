@@ -372,7 +372,8 @@ def _examination_detail(conn, examination_id: int) -> dict:
     row = conn.execute(
         """
         SELECT e.id, e.sample_code, e.status, e.collection_datetime, e.received_datetime,
-               e.abstinence_duration_hours, e.created_at, p.medical_record_number, p.full_name,
+               e.abstinence_duration_hours, e.abstinence_start_at, e.abstinence_ready_at,
+               e.created_at, p.medical_record_number, p.full_name,
                e.volume_ml, e.liquefaction_time_min, e.viscosity, e.ph_value, e.appearance,
                e.macroscopic_notes, e.current_analyst_id, e.queue_number, e.queue_date
         FROM examinations e JOIN patients p ON p.id = e.patient_id
@@ -426,6 +427,9 @@ def _examination_row(row) -> dict:
         "collection_datetime": row["collection_datetime"],
         "received_datetime": row["received_datetime"],
         "abstinence_duration_hours": row["abstinence_duration_hours"],
+        # Waktu mulai pantang dan waktu paling awal pasien boleh diperiksa (untuk kartu jadwal)
+        "abstinence_start_at": row["abstinence_start_at"] if "abstinence_start_at" in row.keys() else None,
+        "abstinence_ready_at": row["abstinence_ready_at"] if "abstinence_ready_at" in row.keys() else None,
         "created_at": row["created_at"],
         "queue_number": row["queue_number"],
         "queue_date": row["queue_date"],
@@ -519,7 +523,8 @@ def create_examination(payload: ExaminationCreate, user: dict = FRONT_OFFICE):
     row = conn.execute(
         """
         SELECT e.id, e.sample_code, e.status, e.collection_datetime, e.received_datetime,
-               e.abstinence_duration_hours, e.created_at, e.queue_number, e.queue_date, p.medical_record_number, p.full_name
+               e.abstinence_duration_hours, e.abstinence_start_at, e.abstinence_ready_at,
+               e.created_at, e.queue_number, e.queue_date, p.medical_record_number, p.full_name
         FROM examinations e JOIN patients p ON p.id = e.patient_id
         WHERE e.id = ?
         """,
@@ -666,7 +671,8 @@ def list_examinations(user: dict = Depends(require_roles(*VIEW_ROLES))):
     rows = conn.execute(
         """
         SELECT e.id, e.sample_code, e.status, e.collection_datetime, e.received_datetime,
-               e.abstinence_duration_hours, e.created_at, e.queue_number, e.queue_date,
+               e.abstinence_duration_hours, e.abstinence_start_at, e.abstinence_ready_at,
+               e.created_at, e.queue_number, e.queue_date,
                e.current_analyst_id, p.medical_record_number, p.full_name,
                e.volume_ml,
                EXISTS (
